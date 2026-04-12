@@ -1,0 +1,25 @@
+# Terraform state — never commit, contains sensitive resource IDs
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+
+# SSH keys — never commit private keys
+*.pem
+*.key
+~/.ssh/
+
+# C++ build artifacts
+engine/build/
+engine/cmake-build-*/
+*.o
+*.a
+*.out
+*.dSYM/
+
+# macOS
+.DS_Store
+
+# CLion
+.idea/
+cmake-build-*/
