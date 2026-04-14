@@ -13,7 +13,7 @@ ssh -i ~/.ssh/ameyaDB ec2-user@node-2.ameyadb.internal
 
 # compile & run
 cd ameyaDB/engine/src
-git pull && g++ -o node *.cpp && ./node <id>
+git pull && g++ -o node *.cpp -lpthread && ./node 0
 
 
 

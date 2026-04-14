@@ -140,6 +140,11 @@ resource "aws_iam_role_policy_attachment" "sqs_access" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSQSFullAccess"
 }
 
+resource "aws_iam_role_policy_attachment" "sns_access" {
+  role       = aws_iam_role.db_node.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSNSFullAccess"
+}
+
 resource "aws_iam_instance_profile" "db_node" {
   name = "ameyaDB-node-profile"
   role = aws_iam_role.db_node.name
@@ -153,10 +158,42 @@ resource "aws_s3_bucket" "ameyaDB" {
   tags          = { Name = "ameyaDB-storage" }
 }
 
+resource "aws_sns_topic" "replication" {
+  name = "ameyaDB-replication"
+  tags = { Name = "ameyaDB-replication" }
+}
+
 resource "aws_sqs_queue" "replication" {
-  name                       = "ameyaDB-replication"
+  count                      = 3
+  name                       = "ameyaDB-replication-node-${count.index}"
   visibility_timeout_seconds = 30
-  tags                       = { Name = "ameyaDB-replication" }
+  tags                       = { Name = "ameyaDB-replication-node-${count.index}" }
+}
+
+resource "aws_sqs_queue_policy" "replication" {
+  count     = 3
+  queue_url = aws_sqs_queue.replication[count.index].id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "sns.amazonaws.com" }
+      Action    = "sqs:SendMessage"
+      Resource  = aws_sqs_queue.replication[count.index].arn
+      Condition = {
+        ArnEquals = {
+          "aws:SourceArn" = aws_sns_topic.replication.arn
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_sns_topic_subscription" "replication" {
+  count     = 3
+  topic_arn = aws_sns_topic.replication.arn
+  protocol  = "sqs"
+  endpoint  = aws_sqs_queue.replication[count.index].arn
 }
 
 resource "aws_instance" "db_node" {
@@ -202,6 +239,14 @@ resource "aws_route53_record" "db_node" {
 
 output "node_ips" {
   value = aws_instance.db_node[*].private_ip
+}
+
+output "sns_topic_arn" {
+  value = aws_sns_topic.replication.arn
+}
+
+output "replication_queue_urls" {
+  value = aws_sqs_queue.replication[*].url
 }
 
 # Bastion
