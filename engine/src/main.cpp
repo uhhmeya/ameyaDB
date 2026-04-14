@@ -6,8 +6,6 @@
 
 using namespace std;
 
-#define NODE_ID 2
-
 struct wr {
     string   k;
     string   v;
@@ -53,14 +51,20 @@ void append_wal(const wr& w) {
     wal.flush();
 }
 
-int main() {
-    cout << "node " << NODE_ID << " starting..." << endl;
+int main(int argc, char* argv[]) {
+
+    if (argc < 2) {
+        cerr << "usage: ./node <node_id>" << endl;
+        return 1;
+    }
+    int node_id = atoi(argv[1]);
+    cout << "node " << node_id << " starting..." << endl;
 
     wr w;
     w.k  = "user:123";
     w.v  = "john";
     w.t  = now_ms();
-    w.id = NODE_ID;
+    w.id = node_id;
     w.i  = 1;
     w.checksum = get_checksum(w);
 
