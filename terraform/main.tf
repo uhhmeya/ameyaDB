@@ -198,7 +198,7 @@ resource "aws_sns_topic_subscription" "replication" {
 
 resource "aws_instance" "db_node" {
   count                  = 3
-  ami                    = "ami-0e10497160c48e829"
+  ami                    = "ami-0c4d8a7fe320af2e0"
   instance_type          = "t3.micro"
   subnet_id              = aws_subnet.private[count.index].id
   key_name               = aws_key_pair.ameyaDB.key_name
