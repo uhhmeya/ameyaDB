@@ -12,8 +12,8 @@ ssh -i ~/.ssh/ameyaDB ec2-user@node-1.ameyadb.internal
 ssh -i ~/.ssh/ameyaDB ec2-user@node-2.ameyadb.internal
 
 # compile & run
-cd ameyaDB/engine/src
-git pull && g++ -o node *.cpp -lpthread && ./node 0
+chmod +x deploy
+./deploy
 
 
 

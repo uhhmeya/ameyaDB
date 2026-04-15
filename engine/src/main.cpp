@@ -28,10 +28,10 @@ const string QUEUE_URLS[3] = {
 struct wr {
     string   k;
     string   v;
-    uint64_t t;
-    uint8_t  src;
-    uint32_t i;
-    uint32_t checksum;
+    uint64_t t{0};
+    uint8_t  src{0};
+    uint32_t i{0};
+    uint32_t checksum{0};
 };
 
 uint64_t now_ms() {
@@ -48,8 +48,8 @@ uint32_t get_checksum(const wr& w) {
                   w.k               +
                   w.v;
     for (char c : data) {
-        crc ^= (uint8_t)c;
-        for (int i = 0; i < 8; i++)
+        crc ^= static_cast<uint8_t>(c);
+        for (int j = 0; j < 8; j++)
             crc = (crc >> 1) ^ (0xEDB88320 & -(crc & 1));
     }
     return crc ^ 0xFFFFFFFF;
@@ -74,12 +74,12 @@ void append_wal(const wr& w) {
 string extract_sns_message(const string& body) {
     auto pos = body.find("\"Message\"");
     if (pos == string::npos) return "";
-    pos = body.find("\"", pos + 9);    // opening quote
+    pos = body.find('"', pos + 9);
     if (pos == string::npos) return "";
-    auto end = body.find("\"", pos + 1); // closing quote
+    auto end = body.find('"', pos + 1);
     if (end == string::npos) return "";
     string msg = body.substr(pos + 1, end - pos - 1);
-    // SNS escapes newlines as \\n — unescape them
+
     string result;
     for (size_t i = 0; i < msg.size(); i++) {
         if (msg[i] == '\\' && i + 1 < msg.size() && msg[i+1] == 'n') {
@@ -120,13 +120,13 @@ void consume_replication(int node_id) {
             if (!raw.empty()) {
                 istringstream ss(raw);
                 wr w;
-                uint32_t src, seq, checksum;
+                uint32_t src{0}, seq{0}, checksum{0};
                 ss >> w.t >> src >> seq >> w.k >> w.v >> checksum;
-                w.src      = (uint8_t)src;
+                w.src      = static_cast<uint8_t>(src);
                 w.i        = seq;
                 w.checksum = checksum;
 
-                if (w.src != (uint8_t)node_id) {
+                if (w.src != static_cast<uint8_t>(node_id)) {
                     append_wal(w); // replicate write from another node
                 }
             }
@@ -145,29 +145,29 @@ void handle_client(int client_fd, int node_id, atomic<uint32_t>& seq) {
     auto read_tcp = [&](void* buf, size_t n) -> bool {
         size_t received = 0;
         while (received < n) {
-            ssize_t r = read(client_fd, (char*)buf + received, n - received);
+            ssize_t r = read(client_fd, static_cast<char*>(buf) + received, n - received);
             if (r == 0) return false;
             if (r < 0) {
                 if (errno == EINTR) continue;
                 return false;
             }
-            received += r;
+            received += static_cast<size_t>(r);
         }
         return true;
     };
 
     const uint32_t MAX_SIZE = 1 << 20; // 1MB
-    uint32_t k_len, v_len;
+    uint32_t k_len{0}, v_len{0};
     string k, v;
 
     bool ok = read_tcp(&k_len, sizeof(k_len))              // how long is k?
               && k_len <= MAX_SIZE
               && (k.resize(k_len),                         // allocate space for k
-                  k_len == 0 || read_tcp(k.data(), k_len)) // assign k
+                  k_len == 0 || read_tcp(&k[0], k_len))
               && read_tcp(&v_len, sizeof(v_len))            // how long is v?
               && v_len <= MAX_SIZE
               && (v.resize(v_len),                         // allocate space for v
-                  v_len == 0 || read_tcp(v.data(), v_len)); // assign v
+                  v_len == 0 || read_tcp(&v[0], v_len));
 
     if (!ok) { close(client_fd); return; }
 
@@ -175,7 +175,7 @@ void handle_client(int client_fd, int node_id, atomic<uint32_t>& seq) {
     w.k        = k;
     w.v        = v;
     w.t        = now_ms();
-    w.src      = node_id;
+    w.src      = static_cast<uint8_t>(node_id);  // fix: C++ cast
     w.i        = ++seq;
     w.checksum = get_checksum(w);
 
@@ -194,12 +194,12 @@ void handle_client(int client_fd, int node_id, atomic<uint32_t>& seq) {
 void start_server(int node_id) {
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
-    sockaddr_in addr;
+    sockaddr_in addr{};
     addr.sin_family      = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
     addr.sin_port        = htons(8080);
 
-    bind(server_fd, (sockaddr*)&addr, sizeof(addr));
+    bind(server_fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
     listen(server_fd, 10);
 
     cout << "node " << node_id << " listening on port 8080" << endl;
@@ -207,26 +207,31 @@ void start_server(int node_id) {
     atomic<uint32_t> seq(0);
     while (true) {
         int client_fd = accept(server_fd, nullptr, nullptr);
-        thread(handle_client, client_fd, node_id, ref(seq)).detach();
+        thread([client_fd, node_id, &seq]() {
+            handle_client(client_fd, node_id, seq);
+        }).detach();
     }
 }
 
 int main(int argc, char* argv[]) {
     Aws::SDKOptions options;
-    Aws::InitAPI(options);
+    InitAPI(options);
 
     if (argc < 2) {
         cerr << "usage: ./node <node_id>" << endl;
-        Aws::ShutdownAPI(options);
+        ShutdownAPI(options);
         return 1;
     }
 
-    int node_id = atoi(argv[1]);
+    int node_id = stoi(argv[1]);
     cout << "node " << node_id << " starting..." << endl;
 
-    thread(consume_replication, node_id).detach();
+    thread([node_id]() {
+        consume_replication(node_id);
+    }).detach();
+
     start_server(node_id);
 
-    Aws::ShutdownAPI(options);
+    ShutdownAPI(options);
     return 0;
 }
