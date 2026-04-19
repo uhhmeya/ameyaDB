@@ -1,11 +1,8 @@
 #include "headers/replication.h"
 #include "headers/globals.h"
-#include "headers/wal.h"
-#include "headers/store.h"
-#include <iostream>
+#include "headers/db.h"
+#include "headers/wr.h"
 #include <sstream>
-#include <thread>
-#include <chrono>
 #include <aws/sns/SNSClient.h>
 #include <aws/sns/model/PublishRequest.h>
 #include <aws/sqs/SQSClient.h>
@@ -60,17 +57,15 @@ void consume_replication() {
 
             if (!raw.empty()) {
                 istringstream ss(raw);
-                wr w;
+                string k, v;
+                uint64_t t{0};
                 uint32_t src{0}, seq_num{0}, checksum{0};
-                ss >> w.t >> src >> seq_num >> w.k >> w.v >> checksum;
-                w.src      = static_cast<uint8_t>(src);
-                w.i        = seq_num;
-                w.checksum = checksum;
+                ss >> t >> src >> seq_num >> k >> v >> checksum;
 
-                if (w.src != static_cast<uint8_t>(node_id)) {
-                    append_wal(w);
-                    apply_write(w);
-                }
+                wr w = make_old_wr(k, v, static_cast<uint8_t>(src), seq_num, t);
+
+                if (w.src != static_cast<uint8_t>(node_id))
+                    apply_wr(w);
             }
 
             (void)sqs.DeleteMessage([&] {
