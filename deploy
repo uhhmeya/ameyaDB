@@ -1,6 +1,6 @@
 #!/bin/bash
 
-KEY="~/.ssh/ameyaDB"
+KEY="$HOME/.ssh/ameyaDB"
 
 if [ -z "$1" ]; then
     echo "usage: ./deploy <node_id>"
@@ -8,6 +8,7 @@ if [ -z "$1" ]; then
 fi
 
 NODE=$1
+ssh-add --apple-use-keychain $KEY 2>/dev/null
 
 # apply infrastructure
 cd terraform
@@ -20,5 +21,5 @@ ssh -A -i $KEY -o StrictHostKeyChecking=no \
     "sudo yum install -y git > /dev/null 2>&1 && \
      if [ -d ameyaDB ]; then cd ameyaDB && git pull; else git clone https://github.com/uhhmeya/ameyaDB ameyaDB && cd ameyaDB; fi && \
      cd engine/src && \
-     g++ -std=c++17 -o node main.cpp wal.cpp store.cpp replication.cpp protocol.cpp handlers.cpp -I/usr/local/include -L/usr/local/lib64 -laws-cpp-sdk-sns -laws-cpp-sdk-sqs -laws-cpp-sdk-core -laws-crt-cpp -laws-c-auth -laws-c-http -laws-c-io -laws-c-common -lpthread -Wl,-rpath,/usr/local/lib64 && \
+     g++ -std=c++17 -o node \$(ls *.cpp) -I/usr/local/include -L/usr/local/lib64 -laws-cpp-sdk-sns -laws-cpp-sdk-sqs -laws-cpp-sdk-core -laws-crt-cpp -laws-c-auth -laws-c-http -laws-c-io -laws-c-common -lpthread -Wl,-rpath,/usr/local/lib64 && \
      ./node ${NODE}"

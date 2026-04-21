@@ -2,4 +2,4 @@
 #include "db.h"
 
 bool publish_to_sns(const wr& w);
-void consume_replication();
+void poll_SQS(const std::string& queue_url);

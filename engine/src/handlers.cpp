@@ -2,7 +2,7 @@
 #include "headers/globals.h"
 #include "headers/db.h"
 #include "headers/wr.h"
-#include "headers/replication.h"
+#include "headers/sqs.h"
 #include <thread>
 #include <chrono>
 #include <unistd.h>
@@ -55,13 +55,15 @@ void handle_write(int client_fd) {
 
     auto [k, v] = *kv;
 
-    wr w = wr::make(k, v, static_cast<uint8_t>(node_id), ++seq);
+    wr w = wr::make_new_wr(k, v, static_cast<uint8_t>(node_id), ++seq);
 
     apply_wr(w);
 
+    // replicate
     while (!publish_to_sns(w))
         this_thread::sleep_for(chrono::milliseconds(100));
 
+    // send ack to client
     uint8_t ack = 1;
     write(client_fd, &ack, sizeof(ack));
     close(client_fd);

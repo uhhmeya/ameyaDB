@@ -1,4 +1,4 @@
-#include "headers/replication.h"
+#include "headers/sqs.h"
 #include "headers/globals.h"
 #include "headers/db.h"
 #include "headers/wr.h"
@@ -39,36 +39,50 @@ bool publish_to_sns(const wr& w) {
     return sns.Publish(req).IsSuccess();
 }
 
-void consume_replication() {
+void poll_SQS(const string& queue_url) {
     Aws::SQS::SQSClient sqs;
-    string queue_url = QUEUE_URLS[node_id];
 
     while (true) {
+
+        // poll
         Aws::SQS::Model::ReceiveMessageRequest req;
         req.SetQueueUrl(queue_url);
         req.SetMaxNumberOfMessages(10);
         req.SetWaitTimeSeconds(5);
-
         auto result = sqs.ReceiveMessage(req);
-        if (!result.IsSuccess()) continue;
+        if (!result.IsSuccess())
+            continue;
 
+        // extract
         for (auto& msg : result.GetResult().GetMessages()) {
             string raw = extract_sns_message(msg.GetBody());
 
-            if (!raw.empty()) {
-                istringstream ss(raw);
-                string k, v;
-                uint64_t t{0};
-                uint32_t src{0}, seq_num{0}, checksum{0};
-                ss >> t >> src >> seq_num >> k >> v >> checksum;
-
-                wr w = make_old_wr(k, v, static_cast<uint8_t>(src), seq_num, t);
-
-                if (w.src != static_cast<uint8_t>(node_id))
-                    apply_wr(w);
+            // early return : extract error
+            if (raw.empty()) {
+                sqs.DeleteMessage([&] {
+                    Aws::SQS::Model::DeleteMessageRequest del;
+                    del.SetQueueUrl(queue_url);
+                    del.SetReceiptHandle(msg.GetReceiptHandle());
+                    return del;
+                }());
+                continue;
             }
 
-            (void)sqs.DeleteMessage([&] {
+            // parse
+            istringstream ss(raw);
+            string k, v;
+            uint64_t t{0};
+            uint32_t src{0}, seq_num{0}, checksum{0};
+            ss >> t >> src >> seq_num >> k >> v >> checksum;
+
+            // apply
+            if (src != static_cast<uint8_t>(node_id)) {
+                wr w = make_foreign_wr(k, v, static_cast<uint8_t>(src), seq_num, t);
+                apply_wr(w);
+            }
+
+            // remove from queue
+            sqs.DeleteMessage([&] {
                 Aws::SQS::Model::DeleteMessageRequest del;
                 del.SetQueueUrl(queue_url);
                 del.SetReceiptHandle(msg.GetReceiptHandle());
@@ -77,3 +91,4 @@ void consume_replication() {
         }
     }
 }
+

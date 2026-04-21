@@ -23,17 +23,8 @@ uint32_t get_checksum(const wr& w) {
     }
     return crc ^ 0xFFFFFFFF;
 }
-string serialize_wr(const wr& w) {
-    return to_string(w.t)        + " " +
-           to_string(w.src)      + " " +
-           to_string(w.i)        + " " +
-           w.k                   + " " +
-           w.v                   + " " +
-           to_string(w.checksum) + "\n";
-}
 
-// from client
-wr make_new_wr(const string& k, const string& v, uint8_t src, uint32_t seq) {
+wr wr::make_new_wr(const string& k, const string& v, uint8_t src, uint32_t seq) {
     wr w;
     w.k        = k;
     w.v        = v;
@@ -44,8 +35,17 @@ wr make_new_wr(const string& k, const string& v, uint8_t src, uint32_t seq) {
     return w;
 }
 
+string serialize_wr(const wr& w) {
+    return to_string(w.t)        + " " +
+           to_string(w.src)      + " " +
+           to_string(w.i)        + " " +
+           w.k                   + " " +
+           w.v                   + " " +
+           to_string(w.checksum) + "\n";
+}
+
 // from SQS
-wr make_old_wr(const string& k, const string& v, uint8_t src, uint32_t seq, uint64_t t) {
+wr make_foreign_wr(const string& k, const string& v, uint8_t src, uint32_t seq, uint64_t t) {
     wr w;
     w.k        = k;
     w.v        = v;

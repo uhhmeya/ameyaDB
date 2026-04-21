@@ -8,7 +8,7 @@
 #include <aws/core/Aws.h>
 #include "headers/globals.h"
 #include "headers/handlers.h"
-#include "headers/replication.h"
+#include "headers/sqs.h"
 
 using namespace std;
 
@@ -58,15 +58,17 @@ void dispatch(int client_fd) {
         close(client_fd);
 }
 
-int main(char* argv[]) {
+int main(int argc, char* argv[]) {
 
     Aws::SDKOptions options;
     InitAPI(options);
     node_id = stoi(argv[1]);
 
+
     // bthread
-    thread([]() {
-        consume_replication();
+    string queue_url = QUEUE_URLS[node_id];
+    thread([queue_url]() {
+        poll_SQS(queue_url);
     }).detach();
 
     int server_fd = make_listener();
