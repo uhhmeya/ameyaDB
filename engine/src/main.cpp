@@ -9,19 +9,27 @@
 #include "headers/globals.h"
 #include "headers/handlers.h"
 #include "headers/sqs.h"
+#include <filesystem>
+
 
 using namespace std;
 
 // globals
 int node_id;
 atomic<uint32_t> seq{0};
+
 unordered_map<string, string> db;
+ofstream wal;
+
 shared_mutex db_mutex;
+mutex wal_mutex;
 
-
-// tcp wr = 0 klen k vlen v
-// tcp r = 1 klen k
-
+/*
+tcp wr = 0 klen k vlen v
+tcp r = 1 klen k
+key = k0 --> k9
+val = v0 --> v999
+*/
 int make_listener() {
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     int opt = 1;
@@ -64,11 +72,20 @@ int main(int argc, char* argv[]) {
     InitAPI(options);
     node_id = stoi(argv[1]);
 
+    filesystem::create_directories("/var/log/ameyaDB");
+    wal.open("/var/log/ameyaDB/wal.log", ios::app);
+    if (!wal.is_open())
+        throw runtime_error("could not open WAL");
 
-    // bthread
-    string queue_url = QUEUE_URLS[node_id];
-    thread([queue_url]() {
-        poll_SQS(queue_url);
+    uint32_t snap_seq = load_snapshot();
+    replay_wal(snap_seq);
+
+    thread([]() {
+        poll_SQS();
+    }).detach();
+
+    thread([]() {
+        take_pictures();
     }).detach();
 
     int server_fd = make_listener();

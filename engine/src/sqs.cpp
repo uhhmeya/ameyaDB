@@ -11,7 +11,7 @@
 
 using namespace std;
 
-static string extract_sns_message(const string& body) {
+static string extract_SNS(const string& body) {
     auto pos = body.find("\"Message\"");
     if (pos == string::npos) return "";
     pos = body.find('"', pos + 9);
@@ -31,7 +31,7 @@ static string extract_sns_message(const string& body) {
     return result;
 }
 
-bool publish_to_sns(const wr& w) {
+bool publish_SNS(const wr& w) {
     Aws::SNS::SNSClient sns;
     Aws::SNS::Model::PublishRequest req;
     req.SetTopicArn(SNS_TOPIC_ARN);
@@ -39,8 +39,16 @@ bool publish_to_sns(const wr& w) {
     return sns.Publish(req).IsSuccess();
 }
 
-void poll_SQS(const string& queue_url) {
+static void del_SQS(Aws::SQS::SQSClient& sqs, const string& queue_url, const string& receipt) {
+    Aws::SQS::Model::DeleteMessageRequest del;
+    del.SetQueueUrl(queue_url);
+    del.SetReceiptHandle(receipt);
+    sqs.DeleteMessage(del);
+}
+
+void poll_SQS() {
     Aws::SQS::SQSClient sqs;
+    string queue_url = QUEUE_URLS[node_id];
 
     while (true) {
 
@@ -53,18 +61,12 @@ void poll_SQS(const string& queue_url) {
         if (!result.IsSuccess())
             continue;
 
-        // extract
         for (auto& msg : result.GetResult().GetMessages()) {
-            string raw = extract_sns_message(msg.GetBody());
+            string raw = extract_SNS(msg.GetBody());
 
-            // early return : extract error
+            // bad msg
             if (raw.empty()) {
-                sqs.DeleteMessage([&] {
-                    Aws::SQS::Model::DeleteMessageRequest del;
-                    del.SetQueueUrl(queue_url);
-                    del.SetReceiptHandle(msg.GetReceiptHandle());
-                    return del;
-                }());
+                del_SQS(sqs, queue_url, msg.GetReceiptHandle());
                 continue;
             }
 
@@ -75,19 +77,28 @@ void poll_SQS(const string& queue_url) {
             uint32_t src{0}, seq_num{0}, checksum{0};
             ss >> t >> src >> seq_num >> k >> v >> checksum;
 
-            // apply
-            if (src != static_cast<uint8_t>(node_id)) {
-                wr w = make_foreign_wr(k, v, static_cast<uint8_t>(src), seq_num, t);
-                apply_wr(w);
+            // skip own messages
+            if (src == static_cast<uint8_t>(node_id)) {
+                del_SQS(sqs, queue_url, msg.GetReceiptHandle());
+                continue;
             }
 
-            // remove from queue
-            sqs.DeleteMessage([&] {
-                Aws::SQS::Model::DeleteMessageRequest del;
-                del.SetQueueUrl(queue_url);
-                del.SetReceiptHandle(msg.GetReceiptHandle());
-                return del;
-            }());
+            wr w;
+            w.k        = k;
+            w.v        = v;
+            w.t        = t; // sqs write
+            w.src      = static_cast<uint8_t>(src);
+            w.i        = seq_num;
+            w.checksum = compute_checksum(w);
+
+            // sqs writes can be curropted
+            if (w.checksum != checksum) {
+                del_SQS(sqs, queue_url, msg.GetReceiptHandle());
+                continue;
+            }
+
+            apply_wr(w);
+            del_SQS(sqs, queue_url, msg.GetReceiptHandle());
         }
     }
 }

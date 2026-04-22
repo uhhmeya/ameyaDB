@@ -9,7 +9,7 @@
 
 using namespace std;
 
-// socket reads
+// socket read utils
 static bool read_tcp(int client_fd, void* buf, size_t n) {
     size_t received = 0;
 
@@ -55,15 +55,19 @@ void handle_write(int client_fd) {
 
     auto [k, v] = *kv;
 
-    wr w = wr::make_new_wr(k, v, static_cast<uint8_t>(node_id), ++seq);
+    wr w;
+    w.k        = k;
+    w.v        = v;
+    w.t        = now_ms(); // tcp write
+    w.src      = static_cast<uint8_t>(node_id);
+    w.i        = ++seq;
+    w.checksum = compute_checksum(w);
 
     apply_wr(w);
 
-    // replicate
-    while (!publish_to_sns(w))
+    while (!publish_SNS(w))
         this_thread::sleep_for(chrono::milliseconds(100));
 
-    // send ack to client
     uint8_t ack = 1;
     write(client_fd, &ack, sizeof(ack));
     close(client_fd);

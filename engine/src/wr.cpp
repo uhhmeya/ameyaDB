@@ -9,7 +9,8 @@ uint64_t now_ms() {
         chrono::system_clock::now().time_since_epoch()
     ).count();
 }
-uint32_t get_checksum(const wr& w) {
+
+uint32_t compute_checksum(const wr& w) {
     uint32_t crc = 0xFFFFFFFF;
     string data = to_string(w.t)   +
                   to_string(w.src) +
@@ -24,17 +25,6 @@ uint32_t get_checksum(const wr& w) {
     return crc ^ 0xFFFFFFFF;
 }
 
-wr wr::make_new_wr(const string& k, const string& v, uint8_t src, uint32_t seq) {
-    wr w;
-    w.k        = k;
-    w.v        = v;
-    w.t        = now_ms();
-    w.src      = src;
-    w.i        = seq;
-    w.checksum = get_checksum(w);
-    return w;
-}
-
 string serialize_wr(const wr& w) {
     return to_string(w.t)        + " " +
            to_string(w.src)      + " " +
@@ -44,14 +34,3 @@ string serialize_wr(const wr& w) {
            to_string(w.checksum) + "\n";
 }
 
-// from SQS
-wr make_foreign_wr(const string& k, const string& v, uint8_t src, uint32_t seq, uint64_t t) {
-    wr w;
-    w.k        = k;
-    w.v        = v;
-    w.t        = t;
-    w.src      = src;
-    w.i        = seq;
-    w.checksum = get_checksum(w);
-    return w;
-}
