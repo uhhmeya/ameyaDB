@@ -19,6 +19,29 @@ static unordered_map<string,string> old_snap;
 static unordered_set<string> dirty_keys;
 static mutex dirty_keys_mutex;
 
+uint32_t compute_checksum(const wr& w) {
+    uint32_t crc = 0xFFFFFFFF;
+    string data = to_string(w.time_leader_received)   +
+                  to_string(w.forwarding_node) +
+                  to_string(w.log_index)   +
+                  w.k               +
+                  w.v;
+    for (char c : data) {
+        crc ^= static_cast<uint8_t>(c);
+        for (int j = 0; j < 8; j++)
+            crc = (crc >> 1) ^ (0xEDB88320 & -(crc & 1));
+    }
+    return crc ^ 0xFFFFFFFF;
+}
+string serialize_wr(const wr& w) {
+    return to_string(w.time_leader_received)        + " " +
+           to_string(w.forwarding_node)      + " " +
+           to_string(w.log_index)        + " " +
+           w.k                   + " " +
+           w.v                   + " " +
+           to_string(w.checksum) + "\n";
+}
+
 void apply_wr(const wr& w) {
 
     string str_wr = serialize_wr(w);
@@ -55,7 +78,7 @@ void take_pictures() {
     while (true) {
 
         this_thread::sleep_for(chrono::seconds(5));
-        uint32_t seqX = seq.load();
+        uint32_t seqX = writes_received.load();
 
         if (seqX - writes_since_last_pic < WRITES_BETWEEN_SNAPS)
             continue;
@@ -85,7 +108,6 @@ void take_pictures() {
         writes_since_last_pic = seqX;
     }
 }
-
 uint32_t load_snapshot() {
     uint32_t best_seq = 0;
     for (auto& entry : filesystem::directory_iterator(SNAP_DIR)) {
@@ -114,7 +136,6 @@ uint32_t load_snapshot() {
 
     return best_seq;
 }
-
 void replay_wal(uint32_t after_seq) {
     ifstream f(SNAP_DIR + "wal.log");
     if (!f.is_open()) return;
@@ -124,24 +145,24 @@ void replay_wal(uint32_t after_seq) {
         if (line.empty()) continue;
 
         istringstream ss(line);
-        uint64_t t;
-        uint32_t src, i, checksum;
+        uint64_t time_leader_received;
+        uint32_t forwarding_node, log_index, checksum;
         string k, v;
-        ss >> t >> src >> i >> k >> v >> checksum;
+        ss >> time_leader_received >> forwarding_node >> log_index >> k >> v >> checksum;
 
         if (ss.fail())
             continue;
 
         // already covered by snapshot
-        if (i <= after_seq)
+        if (log_index <= after_seq)
             continue;
 
         wr w;
         w.k = k;
         w.v = v;
-        w.t = t;
-        w.src = static_cast<uint8_t>(src);
-        w.i = i;
+        w.time_leader_received = time_leader_received;
+        w.forwarding_node = static_cast<uint8_t>(forwarding_node);
+        w.log_index = log_index;
         w.checksum = compute_checksum(w);
 
         // skip corrupted entries

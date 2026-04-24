@@ -10,26 +10,25 @@
 #include "headers/handlers.h"
 #include "headers/sqs.h"
 #include <filesystem>
+#include <headers/db.h>
 
+/*
+ * key = k0 --> k9
+ * val = v0 --> v999
+ * tcp wr = 0 klen k vlen v
+ * tcp r = 1 klen k
+ */
 
 using namespace std;
 
-// globals
 int node_id;
-atomic<uint32_t> seq{0};
-
+atomic<uint32_t> writes_received{0};
 unordered_map<string, string> db;
 ofstream wal;
-
 shared_mutex db_mutex;
 mutex wal_mutex;
 
-/*
-tcp wr = 0 klen k vlen v
-tcp r = 1 klen k
-key = k0 --> k9
-val = v0 --> v999
-*/
+
 int make_listener() {
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     int opt = 1;
@@ -94,7 +93,6 @@ int main(int argc, char* argv[]) {
 
         int client_fd = accept(server_fd, nullptr, nullptr);
 
-        // worker
         thread([client_fd]() {
             dispatch(client_fd);
         }).detach();

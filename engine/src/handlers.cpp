@@ -2,12 +2,25 @@
 #include "headers/globals.h"
 #include "headers/db.h"
 #include "headers/wr.h"
-#include "headers/sqs.h"
 #include <thread>
 #include <chrono>
 #include <unistd.h>
+#include <aws/sns/SNSClient.h>
+#include <aws/sns/model/PublishRequest.h>
 
-using namespace std;
+
+static uint64_t now_ms() {
+    return chrono::duration_cast<chrono::milliseconds>(
+        chrono::system_clock::now().time_since_epoch()
+    ).count();
+}
+static bool publish_SNS(const wr& w) {
+    Aws::SNS::SNSClient sns;
+    Aws::SNS::Model::PublishRequest req;
+    req.SetTopicArn(SNS_TOPIC_ARN);
+    req.SetMessage(serialize_wr(w));
+    return sns.Publish(req).IsSuccess();
+}
 
 // socket read utils
 static bool read_tcp(int client_fd, void* buf, size_t n) {
@@ -56,12 +69,12 @@ void handle_write(int client_fd) {
     auto [k, v] = *kv;
 
     wr w;
-    w.k        = k;
-    w.v        = v;
-    w.t        = now_ms(); // tcp write
-    w.src      = static_cast<uint8_t>(node_id);
-    w.i        = ++seq;
-    w.checksum = compute_checksum(w);
+    w.k                    = k;
+    w.v                    = v;
+    w.time_leader_received = now_ms(); // tcp write
+    w.forwarding_node      = static_cast<uint8_t>(node_id);
+    w.log_index            = ++writes_received;
+    w.checksum             = compute_checksum(w);
 
     apply_wr(w);
 
@@ -72,7 +85,6 @@ void handle_write(int client_fd) {
     write(client_fd, &ack, sizeof(ack));
     close(client_fd);
 }
-
 void handle_read(int client_fd) {
 
     auto k = read_k(client_fd);

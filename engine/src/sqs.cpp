@@ -9,8 +9,6 @@
 #include <aws/sqs/model/ReceiveMessageRequest.h>
 #include <aws/sqs/model/DeleteMessageRequest.h>
 
-using namespace std;
-
 static string extract_SNS(const string& body) {
     auto pos = body.find("\"Message\"");
     if (pos == string::npos) return "";
@@ -29,14 +27,6 @@ static string extract_SNS(const string& body) {
         }
     }
     return result;
-}
-
-bool publish_SNS(const wr& w) {
-    Aws::SNS::SNSClient sns;
-    Aws::SNS::Model::PublishRequest req;
-    req.SetTopicArn(SNS_TOPIC_ARN);
-    req.SetMessage(serialize_wr(w));
-    return sns.Publish(req).IsSuccess();
 }
 
 static void del_SQS(Aws::SQS::SQSClient& sqs, const string& queue_url, const string& receipt) {
@@ -61,6 +51,7 @@ void poll_SQS() {
         if (!result.IsSuccess())
             continue;
 
+        // extract
         for (auto& msg : result.GetResult().GetMessages()) {
             string raw = extract_SNS(msg.GetBody());
 
@@ -73,25 +64,25 @@ void poll_SQS() {
             // parse
             istringstream ss(raw);
             string k, v;
-            uint64_t t{0};
-            uint32_t src{0}, seq_num{0}, checksum{0};
-            ss >> t >> src >> seq_num >> k >> v >> checksum;
+            uint64_t time_leader_received{0};
+            uint32_t forwarding_node{0}, log_index{0}, checksum{0};
+            ss >> time_leader_received >> forwarding_node >> log_index >> k >> v >> checksum;
 
-            // skip own messages
-            if (src == static_cast<uint8_t>(node_id)) {
+            // own message
+            if (forwarding_node == static_cast<uint8_t>(node_id)) {
                 del_SQS(sqs, queue_url, msg.GetReceiptHandle());
                 continue;
             }
 
             wr w;
-            w.k        = k;
-            w.v        = v;
-            w.t        = t; // sqs write
-            w.src      = static_cast<uint8_t>(src);
-            w.i        = seq_num;
-            w.checksum = compute_checksum(w);
+            w.k                    = k;
+            w.v                    = v;
+            w.time_leader_received = time_leader_received; // sqs write
+            w.forwarding_node      = static_cast<uint8_t>(forwarding_node);
+            w.log_index            = log_index;
+            w.checksum             = compute_checksum(w);
 
-            // sqs writes can be curropted
+            // partial write
             if (w.checksum != checksum) {
                 del_SQS(sqs, queue_url, msg.GetReceiptHandle());
                 continue;
@@ -102,4 +93,3 @@ void poll_SQS() {
         }
     }
 }
-
