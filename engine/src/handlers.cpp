@@ -9,11 +9,7 @@
 #include <aws/sns/model/PublishRequest.h>
 
 
-static uint64_t now_ms() {
-    return chrono::duration_cast<chrono::milliseconds>(
-        chrono::system_clock::now().time_since_epoch()
-    ).count();
-}
+
 static bool publish_SNS(const wr& w) {
     Aws::SNS::SNSClient sns;
     Aws::SNS::Model::PublishRequest req;
@@ -73,13 +69,13 @@ void handle_write(int client_fd) {
     w.v                    = v;
     w.time_leader_received = now_ms(); // tcp write
     w.forwarding_node      = static_cast<uint8_t>(node_id);
-    w.log_index            = ++writes_received;
+    w.log_index            = ++log_index;
     w.checksum             = compute_checksum(w);
 
     apply_wr(w);
 
     while (!publish_SNS(w))
-        this_thread::sleep_for(chrono::milliseconds(100));
+        sleep_for(milliseconds(100));
 
     uint8_t ack = 1;
     write(client_fd, &ack, sizeof(ack));

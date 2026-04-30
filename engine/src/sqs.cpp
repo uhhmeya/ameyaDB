@@ -55,7 +55,7 @@ void poll_SQS() {
         for (auto& msg : result.GetResult().GetMessages()) {
             string raw = extract_SNS(msg.GetBody());
 
-            // bad msg
+            // discard bad msg
             if (raw.empty()) {
                 del_SQS(sqs, queue_url, msg.GetReceiptHandle());
                 continue;
@@ -68,7 +68,7 @@ void poll_SQS() {
             uint32_t forwarding_node{0}, log_index{0}, checksum{0};
             ss >> time_leader_received >> forwarding_node >> log_index >> k >> v >> checksum;
 
-            // own message
+            // discard own message
             if (forwarding_node == static_cast<uint8_t>(node_id)) {
                 del_SQS(sqs, queue_url, msg.GetReceiptHandle());
                 continue;
@@ -77,17 +77,18 @@ void poll_SQS() {
             wr w;
             w.k                    = k;
             w.v                    = v;
-            w.time_leader_received = time_leader_received; // sqs write
+            w.time_leader_received = time_leader_received; // replication
             w.forwarding_node      = static_cast<uint8_t>(forwarding_node);
             w.log_index            = log_index;
             w.checksum             = compute_checksum(w);
 
-            // partial write
+            // discard partial write
             if (w.checksum != checksum) {
                 del_SQS(sqs, queue_url, msg.GetReceiptHandle());
                 continue;
             }
 
+            // replicate !
             apply_wr(w);
             del_SQS(sqs, queue_url, msg.GetReceiptHandle());
         }

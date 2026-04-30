@@ -12,21 +12,32 @@
 #include <filesystem>
 #include <headers/db.h>
 
-/*
- * key = k0 --> k9
- * val = v0 --> v999
- * tcp wr = 0 klen k vlen v
- * tcp r = 1 klen k
- */
+/* *
 
-using namespace std;
+    === KV FORMAT ===
+key = k0 --> k9
+val = v0 --> v999
+
+    === CLIENT TCP FORMAT ===
+tcp wr = op klen k vlen v
+tcp r = op klen k
+
+* */
 
 int node_id;
-atomic<uint32_t> writes_received{0};
+atomic<uint32_t> log_index{0};
+
 unordered_map<string, string> db;
 ofstream wal;
+
 shared_mutex db_mutex;
 mutex wal_mutex;
+
+atomic<uint32_t> term{0};
+atomic<int>      vote{-1};
+atomic<Role>     role{FOLLOWER};
+
+atomic<uint64_t> time_of_last_hb_received{0};
 
 
 int make_listener() {
@@ -47,18 +58,16 @@ void dispatch(int client_fd) {
 
     char op = 0;
 
-    // client DC before sending anything
+    // client dc
     if (read(client_fd, &op, 1) != 1) {
         close(client_fd);
         return;
     }
 
-    // only 1 byte is read
-
-    if (op == 1)
+    if (op == WRITE)
         handle_write(client_fd);
 
-    else if (op == 2)
+    else if (op == READ)
         handle_read(client_fd);
 
     else
@@ -76,8 +85,8 @@ int main(int argc, char* argv[]) {
     if (!wal.is_open())
         throw runtime_error("could not open WAL");
 
-    uint32_t snap_seq = load_snapshot();
-    replay_wal(snap_seq);
+    int snap = load_snap();
+    replay_wal(snap);
 
     thread([]() {
         poll_SQS();

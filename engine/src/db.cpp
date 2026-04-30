@@ -6,18 +6,14 @@
 #include <shared_mutex>
 #include <thread>
 #include <unordered_set>
-#include <chrono>
 #include <filesystem>
 #include <sstream>
 
-using namespace std;
-
-static const uint32_t WRITES_BETWEEN_SNAPS = 100;
 static const string SNAP_DIR = "/var/log/ameyaDB/";
 
-static unordered_map<string,string> old_snap;
-static unordered_set<string> dirty_keys;
-static mutex dirty_keys_mutex;
+static str_arr_2D prev_snap;
+static str_arr_1D dk;
+static mutex dk_mutex;
 
 uint32_t compute_checksum(const wr& w) {
     uint32_t crc = 0xFFFFFFFF;
@@ -43,29 +39,26 @@ string serialize_wr(const wr& w) {
 }
 
 void apply_wr(const wr& w) {
-
     string str_wr = serialize_wr(w);
 
-    // write to WAL
     {
         lock_guard lock(wal_mutex);
         wal << str_wr;
         wal.flush();
     }
 
-    // write to DB
     {
         unique_lock lock(db_mutex);
         db[w.k] = w.v;
     }
 
-    // write to dirty keys
     {
-        lock_guard lock(dirty_keys_mutex);
-        dirty_keys.insert(w.k);
+        lock_guard lock(dk_mutex);
+        dk.insert(w.k);
     }
 
 }
+
 string apply_r(const string& k) {
     shared_lock lock(db_mutex);
     auto it = db.find(k);
@@ -73,56 +66,55 @@ string apply_r(const string& k) {
 }
 
 void take_pictures() {
-
-    uint32_t writes_since_last_pic = 0;
+    int idx_in_prev_pic = 0;
     while (true) {
-
-        this_thread::sleep_for(chrono::seconds(5));
-        uint32_t seqX = writes_received.load();
-
-        if (seqX - writes_since_last_pic < WRITES_BETWEEN_SNAPS)
+        sleep_for(seconds(5));
+        int idx_in_cur_pic = log_index.load();
+        if (idx_in_cur_pic - idx_in_prev_pic < 100)
             continue;
 
-        // swap dirty keys
-        unordered_set<string> new_dirty_keys;
+        str_arr_1D empty;
         {
-            lock_guard lock(dirty_keys_mutex);
-            swap(new_dirty_keys, dirty_keys);
+            lock_guard lock(dk_mutex);
+            swap(empty, dk);
         }
+        str_arr_1D dk = empty;
 
-        // build new snapshot
-        unordered_map<string,string> new_snap = old_snap;
+
+        str_arr_2D wip_snap = prev_snap;
         {
             shared_lock lock(db_mutex);
-            for (auto& k : new_dirty_keys)
-                new_snap[k] = db.count(k) ? db.at(k) : "";
+            for (auto& k : dk)
+                wip_snap[k] = db.contains(k) ? db.at(k) : "";
         }
+        str_arr_2D new_snap = wip_snap;
 
-        // write to disk
-        ofstream f(SNAP_DIR + "snapshot." + to_string(seqX) + ".bin");
+        ofstream f(SNAP_DIR + "snapshot." + to_string(idx_in_cur_pic) + ".bin");
         for (auto& [k, v] : new_snap)
             f << k << " " << v << "\n";
         f.flush();
 
-        old_snap = move(new_snap);
-        writes_since_last_pic = seqX;
+        prev_snap = move(new_snap);
+        idx_in_prev_pic = idx_in_cur_pic;
     }
 }
-uint32_t load_snapshot() {
-    uint32_t best_seq = 0;
+
+int load_snap() {
+
+    // finds most recent snap
+    int latest_snapshot_idx = 0;
     for (auto& entry : filesystem::directory_iterator(SNAP_DIR)) {
         string name = entry.path().filename().string();
         if (name.rfind("snapshot.", 0) == 0 && name.ends_with(".bin")) {
             uint32_t s = stoul(name.substr(9, name.size() - 13));
-            if (s > best_seq) best_seq = s;
+            if (s > latest_snapshot_idx) latest_snapshot_idx = s;
         }
     }
-
-    if (best_seq == 0) return 0;
-
-    ifstream f(SNAP_DIR + "snapshot." + to_string(best_seq) + ".bin");
+    if (latest_snapshot_idx == 0) return 0;
+    ifstream f(SNAP_DIR + "snapshot." + to_string(latest_snapshot_idx) + ".bin");
     if (!f.is_open()) return 0;
 
+    // extracts write
     string line;
     unique_lock lock(db_mutex);
     while (getline(f, line)) {
@@ -130,31 +122,34 @@ uint32_t load_snapshot() {
         if (sp == string::npos) continue;
         string k = line.substr(0, sp);
         string v = line.substr(sp + 1);
+
+        // writes to db & prev_snap
         db[k] = v;
-        old_snap[k] = v;
+        prev_snap[k] = v;
     }
 
-    return best_seq;
+    return latest_snapshot_idx;
 }
-void replay_wal(uint32_t after_seq) {
+
+void replay_wal(uint32_t latest_snapshot_idx) {
+
+    // open wal
     ifstream f(SNAP_DIR + "wal.log");
     if (!f.is_open()) return;
-
     string line;
     while (getline(f, line)) {
         if (line.empty()) continue;
 
+        // extract write
         istringstream ss(line);
         uint64_t time_leader_received;
-        uint32_t forwarding_node, log_index, checksum;
+        uint32_t forwarding_node, idx_of_wr, checksum;
         string k, v;
-        ss >> time_leader_received >> forwarding_node >> log_index >> k >> v >> checksum;
+        ss >> time_leader_received >> forwarding_node >> idx_of_wr >> k >> v >> checksum;
+        if (ss.fail()) continue;
 
-        if (ss.fail())
-            continue;
-
-        // already covered by snapshot
-        if (log_index <= after_seq)
+        // discard write covered by snapshot
+        if (idx_of_wr <= latest_snapshot_idx)
             continue;
 
         wr w;
@@ -162,16 +157,14 @@ void replay_wal(uint32_t after_seq) {
         w.v = v;
         w.time_leader_received = time_leader_received;
         w.forwarding_node = static_cast<uint8_t>(forwarding_node);
-        w.log_index = log_index;
+        w.log_index = idx_of_wr;
         w.checksum = compute_checksum(w);
 
-        // skip corrupted entries
+        // discard partial write
         if (w.checksum != checksum)
             continue;
 
-        {
-            unique_lock lock(db_mutex);
-            db[w.k] = w.v;
-        }
+        db[w.k] = w.v;
+        prev_snap[w.k] = w.v;
     }
 }
