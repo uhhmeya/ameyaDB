@@ -80,10 +80,14 @@ int main(int argc, char* argv[]) {
     InitAPI(options);
     node_id = stoi(argv[1]);
 
-    filesystem::create_directories("/var/log/ameyaDB");
-    wal.open("/var/log/ameyaDB/wal.log", ios::app);
+    // creates on deploy and opens on reboot
+    create_directories("/var/log/ameyaDB");
+    create_directories(SNAP_DIR_PATH); // ameyaDB --> snapshots
+    wal.open(WAL_PATH, ios::app); // ameyaDB --> wal.log
+
+    // does not open content of WAL
     if (!wal.is_open())
-        throw runtime_error("could not open WAL");
+        throw runtime_error(" [main] could not setup write handler");
 
     int snap = load_snap();
     replay_wal(snap);

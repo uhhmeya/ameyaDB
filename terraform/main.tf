@@ -196,6 +196,22 @@ resource "aws_sns_topic_subscription" "replication" {
   endpoint  = aws_sqs_queue.replication[count.index].arn
 }
 
+# Persistent data volumes — survive EC2 termination for chaos testing
+resource "aws_ebs_volume" "db_node" {
+  count             = 3
+  availability_zone = "us-east-1${["a", "b", "c"][count.index]}"
+  size              = 20
+  type              = "gp3"
+  tags = { Name = "ameyaDB-data-${count.index}" }
+}
+
+resource "aws_volume_attachment" "db_node" {
+  count       = 3
+  device_name = "/dev/xvdf"
+  volume_id   = aws_ebs_volume.db_node[count.index].id
+  instance_id = aws_instance.db_node[count.index].id
+}
+
 resource "aws_instance" "db_node" {
   count                  = 3
   ami                    = "ami-0a527f352691073f2"
@@ -204,6 +220,19 @@ resource "aws_instance" "db_node" {
   key_name               = aws_key_pair.ameyaDB.key_name
   iam_instance_profile   = aws_iam_instance_profile.db_node.name
   vpc_security_group_ids = [aws_security_group.db_nodes.id]
+
+  # Mount persistent EBS volume at boot.
+  # blkid check ensures we only format on first-ever attach — not on reattach,
+  # so WAL and snapshots survive EC2 termination during chaos testing.
+  user_data = <<-EOF
+    #!/bin/bash
+    if ! blkid /dev/xvdf; then
+      mkfs -t ext4 /dev/xvdf
+    fi
+    mkdir -p /var/log/ameyaDB
+    mount /dev/xvdf /var/log/ameyaDB
+    echo "/dev/xvdf /var/log/ameyaDB ext4 defaults,nofail 0 2" >> /etc/fstab
+  EOF
 
   root_block_device {
     volume_size = 20
@@ -260,6 +289,7 @@ resource "aws_instance" "bastion" {
 
   tags = { Name = "ameyaDB-bastion" }
 }
+
 output "bastion_ip" {
   value = aws_instance.bastion.public_ip
 }

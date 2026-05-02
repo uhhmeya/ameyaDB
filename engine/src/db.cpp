@@ -7,9 +7,9 @@
 #include <thread>
 #include <unordered_set>
 #include <filesystem>
+#include <iostream>
 #include <sstream>
 
-static const string SNAP_DIR = "/var/log/ameyaDB/";
 
 static str_arr_2D prev_snap;
 static str_arr_1D dk;
@@ -89,10 +89,23 @@ void take_pictures() {
         }
         str_arr_2D new_snap = wip_snap;
 
-        ofstream f(SNAP_DIR + "snapshot." + to_string(idx_in_cur_pic) + ".bin");
+        string snap_name = "snapshot." + to_string(idx_in_cur_pic);
+
+        ofstream f(SNAP_DIR_PATH + snap_name + ".tmp");
+
+        if (!f.is_open())
+            throw runtime_error("[take_pictures] could not create snapshot tmp file")
+
+        // write to snap.203.temp
         for (auto& [k, v] : new_snap)
             f << k << " " << v << "\n";
+
         f.flush();
+        f.close();
+
+        // publish snap.203.bin
+        rename((SNAP_DIR_PATH + snap_name + ".tmp").c_str(),
+            (SNAP_DIR_PATH + snap_name + ".bin").c_str());
 
         prev_snap = move(new_snap);
         idx_in_prev_pic = idx_in_cur_pic;
@@ -100,19 +113,30 @@ void take_pictures() {
 }
 
 int load_snap() {
+    int idx_of_last_snap = 0;
 
-    // finds most recent snap
-    int latest_snapshot_idx = 0;
-    for (auto& entry : filesystem::directory_iterator(SNAP_DIR)) {
+    // find latest snap
+    for (auto& entry : directory_iterator(SNAP_DIR_PATH)) {
         string name = entry.path().filename().string();
         if (name.rfind("snapshot.", 0) == 0 && name.ends_with(".bin")) {
             uint32_t s = stoul(name.substr(9, name.size() - 13));
-            if (s > latest_snapshot_idx) latest_snapshot_idx = s;
+            if (s > idx_of_last_snap)
+                idx_of_last_snap = s;
         }
     }
-    if (latest_snapshot_idx == 0) return 0;
-    ifstream f(SNAP_DIR + "snapshot." + to_string(latest_snapshot_idx) + ".bin");
-    if (!f.is_open()) return 0;
+
+    if (idx_of_last_snap == 0) {
+        cerr << "[load_snap] No prev snap found — expected only on fresh deploy\n";
+        return 0;
+    }
+
+    string latest_snap_path = SNAP_DIR_PATH + "snapshot." + to_string(idx_of_last_snap) + ".bin";
+
+    ifstream f(latest_snap_path);
+
+    // necessary because getLine fails silently
+    if (!f.is_open())
+        throw runtime_error("[load_snap] Could not open snapshot: " + latest_snap_path);
 
     // extracts write
     string line;
@@ -128,14 +152,17 @@ int load_snap() {
         prev_snap[k] = v;
     }
 
-    return latest_snapshot_idx;
+    return idx_of_last_snap;
 }
 
-void replay_wal(uint32_t latest_snapshot_idx) {
+void replay_wal(uint32_t idx_of_last_snap) {
 
-    // open wal
-    ifstream f(SNAP_DIR + "wal.log");
-    if (!f.is_open()) return;
+    // open WAL content
+    ifstream f(WAL_PATH);
+
+    if (!f.is_open())
+        throw runtime_error("[replay_wal] could not open WAL content");
+
     string line;
     while (getline(f, line)) {
         if (line.empty()) continue;
@@ -146,10 +173,13 @@ void replay_wal(uint32_t latest_snapshot_idx) {
         uint32_t forwarding_node, idx_of_wr, checksum;
         string k, v;
         ss >> time_leader_received >> forwarding_node >> idx_of_wr >> k >> v >> checksum;
-        if (ss.fail()) continue;
+
+        // discard partial write
+        if (ss.fail())
+            continue;
 
         // discard write covered by snapshot
-        if (idx_of_wr <= latest_snapshot_idx)
+        if (idx_of_wr <= idx_of_last_snap)
             continue;
 
         wr w;

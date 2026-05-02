@@ -3,7 +3,6 @@
 #include "headers/db.h"
 #include "headers/wr.h"
 #include <thread>
-#include <chrono>
 #include <unistd.h>
 #include <aws/sns/SNSClient.h>
 #include <aws/sns/model/PublishRequest.h>

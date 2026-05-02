@@ -33,7 +33,10 @@ static void del_SQS(Aws::SQS::SQSClient& sqs, const string& queue_url, const str
     Aws::SQS::Model::DeleteMessageRequest del;
     del.SetQueueUrl(queue_url);
     del.SetReceiptHandle(receipt);
-    sqs.DeleteMessage(del);
+    auto result = sqs.DeleteMessage(del);
+
+    if (!result.IsSuccess())
+        throw runtime_error("[del_SQS] failed to delete message: " + result.GetError().GetMessage());
 }
 
 void poll_SQS() {

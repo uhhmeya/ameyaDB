@@ -10,6 +10,7 @@
 using namespace std;
 using namespace std::chrono;
 using namespace this_thread;
+using namespace filesystem;
 
 using str_arr_1D = unordered_set<string>;
 using str_arr_2D = unordered_map<string, string>;
@@ -49,7 +50,8 @@ inline uint64_t now_ms() {
     ).count();
 }
 
-
+static const string SNAP_DIR_PATH = "/var/log/ameyaDB/snapshots/";
+static const string WAL_PATH = "/var/log/ameyaDB/wal.log";
 
 inline const std::string SNS_TOPIC_ARN =
     "arn:aws:sns:us-east-1:540799520398:ameyaDB-replication";
