@@ -94,7 +94,7 @@ void take_pictures() {
         ofstream f(SNAP_DIR_PATH + snap_name + ".tmp");
 
         if (!f.is_open())
-            throw runtime_error("[take_pictures] could not create snapshot tmp file")
+            throw runtime_error("[take_pictures] could not create snapshot tmp file");
 
         // write to snap.203.temp
         for (auto& [k, v] : new_snap)
@@ -113,19 +113,19 @@ void take_pictures() {
 }
 
 int load_snap() {
-    int idx_of_last_snap = 0;
+    int log_idx_of_last_WR_in_latest_snap = 0;
 
     // find latest snap
     for (auto& entry : directory_iterator(SNAP_DIR_PATH)) {
         string name = entry.path().filename().string();
         if (name.rfind("snapshot.", 0) == 0 && name.ends_with(".bin")) {
             uint32_t s = stoul(name.substr(9, name.size() - 13));
-            if (s > idx_of_last_snap)
-                idx_of_last_snap = s;
+            if (s > log_idx_of_last_WR_in_latest_snap)
+                log_idx_of_last_WR_in_latest_snap = s;
         }
     }
 
-    if (idx_of_last_snap == 0) {
+    if (log_idx_of_last_WR_in_latest_snap == 0) {
         cerr << "[load_snap] No prev snap found — expected only on fresh deploy\n";
         return 0;
     }
@@ -152,16 +152,19 @@ int load_snap() {
         prev_snap[k] = v;
     }
 
-    return idx_of_last_snap;
+    return log_idx_of_last_WR_in_latest_snap;
 }
 
-void replay_wal(uint32_t idx_of_last_snap) {
+void replay_wal(int log_idx_of_last_WR_in_latest_snap) {
 
     // open WAL content
     ifstream f(WAL_PATH);
 
     if (!f.is_open())
-        throw runtime_error("[replay_wal] could not open WAL content");
+        throw runtime_error("[replay_wal] could not open WAL content\n");
+
+    // handles case where snap covers all writes in WAL
+    int max_log_idx = log_idx_of_last_WR_in_latest_snap;
 
     string line;
     while (getline(f, line)) {
@@ -179,7 +182,7 @@ void replay_wal(uint32_t idx_of_last_snap) {
             continue;
 
         // discard write covered by snapshot
-        if (idx_of_wr <= idx_of_last_snap)
+        if (idx_of_wr <= log_idx_of_last_WR_in_latest_snap)
             continue;
 
         wr w;
@@ -196,5 +199,8 @@ void replay_wal(uint32_t idx_of_last_snap) {
 
         db[w.k] = w.v;
         prev_snap[w.k] = w.v;
+
+        max_log_idx = idx_of_wr;
     }
+    log_index.store(max_log_idx);
 }

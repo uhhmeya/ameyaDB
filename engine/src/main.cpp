@@ -89,8 +89,8 @@ int main(int argc, char* argv[]) {
     if (!wal.is_open())
         throw runtime_error(" [main] could not setup write handler");
 
-    int snap = load_snap();
-    replay_wal(snap);
+    int log_idx_of_last_entry_in_snap = load_snap();
+    replay_wal(log_idx_of_last_entry_in_snap);
 
     thread([]() {
         poll_SQS();
