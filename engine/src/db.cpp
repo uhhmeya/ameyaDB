@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <iostream>
 #include <sstream>
+#include <cstdio>
 
 
 static str_arr_2D prev_snap;
@@ -66,11 +67,12 @@ string apply_r(const string& k) {
 }
 
 void take_pictures() {
-    int idx_in_prev_pic = 0;
+    int idx_of_first_wr_in_prev_pic = 0;
     while (true) {
         sleep_for(seconds(5));
-        int idx_in_cur_pic = log_index.load();
-        if (idx_in_cur_pic - idx_in_prev_pic < 100)
+        int idx_of_first_wr_in_cur_pic = log_index.load();
+
+        if (idx_of_first_wr_in_cur_pic - idx_of_first_wr_in_prev_pic < 100)
             continue;
 
         str_arr_1D empty;
@@ -89,26 +91,63 @@ void take_pictures() {
         }
         str_arr_2D new_snap = wip_snap;
 
-        string snap_name = "snapshot." + to_string(idx_in_cur_pic);
+        string snap_name = "snapshot." + to_string(idx_of_first_wr_in_cur_pic);
 
         ofstream f(SNAP_DIR_PATH + snap_name + ".tmp");
 
-        if (!f.is_open())
-            throw runtime_error("[take_pictures] could not create snapshot tmp file");
-
-        // write to snap.203.temp
+        // write to snap.203.tmp
         for (auto& [k, v] : new_snap)
             f << k << " " << v << "\n";
 
-        f.flush();
+        f.flush(); // flush remaining writes to snap.203.tmp
         f.close();
 
-        // publish snap.203.bin
-        rename((SNAP_DIR_PATH + snap_name + ".tmp").c_str(),
-            (SNAP_DIR_PATH + snap_name + ".bin").c_str());
+        // publish snap.203.bin via atomic rename
+        rename((SNAP_DIR_PATH + snap_name + ".tmp").c_str(), (SNAP_DIR_PATH + snap_name + ".bin").c_str());
 
+        {
+            lock_guard lock(wal_mutex);
+
+            ifstream old_wal(WAL_PATH); // wal.log
+            ofstream new_wal(WAL_PATH + string(".tmp")); // wal.log.tmp
+
+            // read from old wal
+            string line;
+            while (getline(old_wal, line)) {
+                if (line.empty()) continue;
+                istringstream ss(line);
+                uint64_t t; uint32_t fn, idx, cs; string k, v;
+                ss >> t >> fn >> idx >> k >> v >> cs;
+
+                // put write in new wal if its either in the published snap or after it
+                if (!ss.fail() && idx > idx_of_first_wr_in_cur_pic)
+                    new_wal << line << "\n";
+            }
+
+            new_wal.flush();
+            new_wal.close();
+            old_wal.close();
+
+            // publish truncated wal via atomic rename
+            rename((WAL_PATH + string(".tmp")).c_str(), WAL_PATH.c_str());
+
+            wal.close();
+            wal.open(WAL_PATH, ios::app);
+        }
+
+        // increment
         prev_snap = move(new_snap);
-        idx_in_prev_pic = idx_in_cur_pic;
+        idx_of_first_wr_in_prev_pic = idx_of_first_wr_in_cur_pic;
+
+        // delete old snaps
+        for (auto& entry : directory_iterator(SNAP_DIR_PATH)) {
+            string name = entry.path().filename().string();
+            if (name.rfind("snapshot.", 0) == 0 && name.ends_with(".bin")) {
+                uint32_t s = stoul(name.substr(9, name.size() - 13));
+                if (s < idx_of_first_wr_in_cur_pic)  // older than the one we just wrote
+                    remove(entry.path());
+            }
+        }
     }
 }
 
@@ -130,7 +169,8 @@ int load_snap() {
         return 0;
     }
 
-    string latest_snap_path = SNAP_DIR_PATH + "snapshot." + to_string(idx_of_last_snap) + ".bin";
+    string latest_snap_path = SNAP_DIR_PATH + "snapshot." +
+        to_string(log_idx_of_last_WR_in_latest_snap) + ".bin";
 
     ifstream f(latest_snap_path);
 

@@ -89,6 +89,11 @@ int main(int argc, char* argv[]) {
     if (!wal.is_open())
         throw runtime_error(" [main] could not setup write handler");
 
+    // delete tmp snaps
+    for (auto& entry : directory_iterator(SNAP_DIR_PATH))
+        if (entry.path().extension() == ".tmp")
+            remove(entry.path());
+
     int log_idx_of_last_entry_in_snap = load_snap();
     replay_wal(log_idx_of_last_entry_in_snap);
 
