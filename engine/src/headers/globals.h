@@ -50,8 +50,13 @@ inline uint64_t now_ms() {
     ).count();
 }
 
-static const string SNAP_DIR_PATH = "/var/log/ameyaDB/snapshots/";
-static const string WAL_PATH = "/var/log/ameyaDB/wal.log";
+#ifdef TESTING
+    static const string SNAP_DIR_PATH = "./snapshots/";
+    static const string WAL_PATH = "./wal.log";
+#else
+    static const string SNAP_DIR_PATH = "/var/log/ameyaDB/snapshots/";
+    static const string WAL_PATH = "/var/log/ameyaDB/wal.log";
+#endif
 
 inline const std::string SNS_TOPIC_ARN =
     "arn:aws:sns:us-east-1:540799520398:ameyaDB-replication";

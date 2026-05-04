@@ -5,15 +5,17 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
-#include <aws/core/Aws.h>
 #include "headers/globals.h"
 #include "headers/handlers.h"
 #include "headers/sqs.h"
 #include <filesystem>
-#include <headers/db.h>
+#include "headers/db.h"
 
-/* *
+#ifndef TESTING
+    #include <aws/core/Aws.h>
+#endif
 
+/**
     === KV FORMAT ===
 key = k0 --> k9
 val = v0 --> v999
@@ -21,8 +23,7 @@ val = v0 --> v999
     === CLIENT TCP FORMAT ===
 tcp wr = op klen k vlen v
 tcp r = op klen k
-
-* */
+*/
 
 int node_id;
 atomic<uint32_t> log_index{0};
@@ -38,7 +39,6 @@ atomic<int>      vote{-1};
 atomic<Role>     role{FOLLOWER};
 
 atomic<uint64_t> time_of_last_hb_received{0};
-
 
 int make_listener() {
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -76,12 +76,17 @@ void dispatch(int client_fd) {
 
 int main(int argc, char* argv[]) {
 
-    Aws::SDKOptions options;
-    InitAPI(options);
+    #ifndef TESTING
+        Aws::SDKOptions options;
+        InitAPI(options);
+    #endif
+
     node_id = stoi(argv[1]);
 
     // creates on deploy and opens on reboot
-    create_directories("/var/log/ameyaDB");
+    #ifndef TESTING
+        create_directories("/var/log/ameyaDB");
+    #endif
     create_directories(SNAP_DIR_PATH); // ameyaDB --> snapshots
     wal.open(WAL_PATH, ios::app); // ameyaDB --> wal.log
 
@@ -97,9 +102,11 @@ int main(int argc, char* argv[]) {
     int log_idx_of_last_entry_in_snap = load_snap();
     replay_wal(log_idx_of_last_entry_in_snap);
 
-    thread([]() {
-        poll_SQS();
-    }).detach();
+    #ifndef TESTING
+        thread([]() {
+            poll_SQS();
+        }).detach();
+    #endif
 
     thread([]() {
         take_pictures();

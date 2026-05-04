@@ -12,5 +12,5 @@ string apply_r(const std::string& k);
 
 void take_pictures();
 int load_snap();
-void replay_wal(uint32_t x);
+void replay_wal(int x);
 

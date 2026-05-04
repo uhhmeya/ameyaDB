@@ -4,18 +4,23 @@
 #include "headers/wr.h"
 #include <thread>
 #include <unistd.h>
-#include <aws/sns/SNSClient.h>
-#include <aws/sns/model/PublishRequest.h>
+
+#ifndef TESTING
+    #include <aws/sns/SNSClient.h>
+    #include <aws/sns/model/PublishRequest.h>
+#endif
 
 
 
-static bool publish_SNS(const wr& w) {
-    Aws::SNS::SNSClient sns;
-    Aws::SNS::Model::PublishRequest req;
-    req.SetTopicArn(SNS_TOPIC_ARN);
-    req.SetMessage(serialize_wr(w));
-    return sns.Publish(req).IsSuccess();
-}
+#ifndef TESTING
+    static bool publish_SNS(const wr& w) {
+        Aws::SNS::SNSClient sns;
+        Aws::SNS::Model::PublishRequest req;
+        req.SetTopicArn(SNS_TOPIC_ARN);
+        req.SetMessage(serialize_wr(w));
+        return sns.Publish(req).IsSuccess();
+    }
+#endif
 
 // socket read utils
 static bool read_tcp(int client_fd, void* buf, size_t n) {
@@ -73,8 +78,10 @@ void handle_write(int client_fd) {
 
     apply_wr(w);
 
-    while (!publish_SNS(w))
-        sleep_for(milliseconds(100));
+    #ifndef TESTING
+        while (!publish_SNS(w))
+            sleep_for(milliseconds(100));
+    #endif
 
     uint8_t ack = 1;
     write(client_fd, &ack, sizeof(ack));
