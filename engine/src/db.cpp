@@ -135,8 +135,7 @@ void take_pictures() {
             wal.open(WAL_PATH, ios::app);
         }
 
-        // increment
-        prev_snap = move(new_snap);
+        prev_snap = std::move(new_snap);
         idx_of_first_wr_in_prev_pic = idx_of_first_wr_in_cur_pic;
 
         // delete old snaps

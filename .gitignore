@@ -23,3 +23,5 @@ engine/cmake-build-*/
 # CLion
 .idea/
 cmake-build-*/
+
+test

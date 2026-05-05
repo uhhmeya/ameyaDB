@@ -87,6 +87,7 @@ int main(int argc, char* argv[]) {
     #ifndef TESTING
         create_directories("/var/log/ameyaDB");
     #endif
+
     create_directories(SNAP_DIR_PATH); // ameyaDB --> snapshots
     wal.open(WAL_PATH, ios::app); // ameyaDB --> wal.log
 
