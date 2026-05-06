@@ -1,5 +1,5 @@
-#include "headers/raft.h"
-#include "headers/globals.h"
+#include "../headers/raft.h"
+#include "../headers/globals.h"
 #include <thread>
 #include <chrono>
 #include <cstdlib>

@@ -1,7 +1,7 @@
-#include "headers/sqs.h"
-#include "headers/globals.h"
-#include "headers/db.h"
-#include "headers/wr.h"
+#include "../headers/sqs.h"
+#include "../headers/globals.h"
+#include "../headers/db.h"
+#include "../headers/wr.h"
 #include <sstream>
 #include <aws/sns/SNSClient.h>
 #include <aws/sns/model/PublishRequest.h>

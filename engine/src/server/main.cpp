@@ -5,11 +5,11 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
-#include "headers/globals.h"
-#include "headers/handlers.h"
-#include "headers/sqs.h"
+#include "../headers/globals.h"
+#include "../headers/handlers.h"
+#include "../headers/sqs.h"
 #include <filesystem>
-#include "headers/db.h"
+#include "../headers/db.h"
 
 #ifndef TESTING
     #include <aws/core/Aws.h>
@@ -40,6 +40,17 @@ atomic<Role>     role{FOLLOWER};
 
 atomic<uint64_t> time_of_last_hb_received{0};
 
+// put snaps & wal in src during local run_server_locally
+#ifdef TESTING
+    const string SNAP_DIR_PATH = "./snapshots/";
+    const string WAL_PATH = "./wal.log";
+
+// put snaps & wal in var/log/ameyaDB on ec2s
+#else
+    const string SNAP_DIR_PATH = "/var/log/ameyaDB/snapshots/";
+    const string WAL_PATH = "/var/log/ameyaDB/wal.log";
+#endif
+
 int make_listener() {
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     int opt = 1;
@@ -55,43 +66,36 @@ int make_listener() {
 }
 
 void dispatch(int client_fd) {
-
     char op = 0;
 
-    // client dc
-    if (read(client_fd, &op, 1) != 1) {
-        close(client_fd);
-        return;
+    // only reads first byte in socket
+    while (read(client_fd, &op, 1) == 1) {
+
+        if (op == WRITE)
+            handle_write(client_fd);
+
+        else if (op == READ)
+            handle_read(client_fd);
     }
 
-    if (op == WRITE)
-        handle_write(client_fd);
-
-    else if (op == READ)
-        handle_read(client_fd);
-
-    else
-        close(client_fd);
+    close(client_fd);
 }
 
 int main(int argc, char* argv[]) {
 
+    // skip --- local testing
     #ifndef TESTING
         Aws::SDKOptions options;
         InitAPI(options);
+        create_directories("/var/log/ameyaDB");
     #endif
 
     node_id = stoi(argv[1]);
 
-    // creates on deploy and opens on reboot
-    #ifndef TESTING
-        create_directories("/var/log/ameyaDB");
-    #endif
+    create_directories(SNAP_DIR_PATH);
+    wal.open(WAL_PATH, ios::app);
 
-    create_directories(SNAP_DIR_PATH); // ameyaDB --> snapshots
-    wal.open(WAL_PATH, ios::app); // ameyaDB --> wal.log
-
-    // does not open content of WAL
+    // does not open WAL content
     if (!wal.is_open())
         throw runtime_error(" [main] could not setup write handler");
 
@@ -103,6 +107,7 @@ int main(int argc, char* argv[]) {
     int log_idx_of_last_entry_in_snap = load_snap();
     replay_wal(log_idx_of_last_entry_in_snap);
 
+    // skip -- local run_server_locally
     #ifndef TESTING
         thread([]() {
             poll_SQS();

@@ -1,6 +1,6 @@
-#include "headers/db.h"
-#include "headers/wr.h"
-#include "headers/globals.h"
+#include "../headers/db.h"
+#include "../headers/wr.h"
+#include "../headers/globals.h"
 #include <fstream>
 #include <mutex>
 #include <shared_mutex>
@@ -12,7 +12,11 @@
 #include <cstdio>
 
 
-static str_arr_2D prev_snap;
+// accessed during replay_wal() & load_snap() on single thread boot
+// accessed by take_pics() by snap bthread
+static str_arr_2D prev_snap_arr;
+
+// shared by workers and snap_bthread
 static str_arr_1D dk;
 static mutex dk_mutex;
 
@@ -63,7 +67,7 @@ void apply_wr(const wr& w) {
 string apply_r(const string& k) {
     shared_lock lock(db_mutex);
     auto it = db.find(k);
-    return it != db.end() ? it->second : "";
+    return it != db.end() ? it->second : "KEY_NOT_FOUND";
 }
 
 void take_pictures() {
@@ -83,20 +87,20 @@ void take_pictures() {
         str_arr_1D dk = empty;
 
 
-        str_arr_2D wip_snap = prev_snap;
+        str_arr_2D wip_snap_arr = prev_snap_arr;
         {
             shared_lock lock(db_mutex);
             for (auto& k : dk)
-                wip_snap[k] = db.contains(k) ? db.at(k) : "";
+                wip_snap_arr[k] = db.contains(k) ? db.at(k) : "";
         }
-        str_arr_2D new_snap = wip_snap;
+        str_arr_2D new_snap_arr = wip_snap_arr;
 
         string snap_name = "snapshot." + to_string(idx_of_first_wr_in_cur_pic);
 
         ofstream f(SNAP_DIR_PATH + snap_name + ".tmp");
 
         // write to snap.203.tmp
-        for (auto& [k, v] : new_snap)
+        for (auto& [k, v] : new_snap_arr)
             f << k << " " << v << "\n";
 
         f.flush(); // flush remaining writes to snap.203.tmp
@@ -135,7 +139,7 @@ void take_pictures() {
             wal.open(WAL_PATH, ios::app);
         }
 
-        prev_snap = std::move(new_snap);
+        prev_snap_arr = std::move(new_snap_arr);
         idx_of_first_wr_in_prev_pic = idx_of_first_wr_in_cur_pic;
 
         // delete old snaps
@@ -188,7 +192,7 @@ int load_snap() {
 
         // writes to db & prev_snap
         db[k] = v;
-        prev_snap[k] = v;
+        prev_snap_arr[k] = v;
     }
 
     return log_idx_of_last_WR_in_latest_snap;
@@ -237,7 +241,7 @@ void replay_wal(int log_idx_of_last_WR_in_latest_snap) {
             continue;
 
         db[w.k] = w.v;
-        prev_snap[w.k] = w.v;
+        prev_snap_arr[w.k] = w.v;
 
         max_log_idx = idx_of_wr;
     }

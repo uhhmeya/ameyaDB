@@ -15,6 +15,8 @@ using namespace filesystem;
 using str_arr_1D = unordered_set<string>;
 using str_arr_2D = unordered_map<string, string>;
 
+extern const string SNAP_DIR_PATH;
+extern const string WAL_PATH;
 
 enum Op {
     WRITE          = 1,
@@ -49,14 +51,6 @@ inline uint64_t now_ms() {
         system_clock::now().time_since_epoch()
     ).count();
 }
-
-#ifdef TESTING
-    static const string SNAP_DIR_PATH = "./snapshots/";
-    static const string WAL_PATH = "./wal.log";
-#else
-    static const string SNAP_DIR_PATH = "/var/log/ameyaDB/snapshots/";
-    static const string WAL_PATH = "/var/log/ameyaDB/wal.log";
-#endif
 
 inline const std::string SNS_TOPIC_ARN =
     "arn:aws:sns:us-east-1:540799520398:ameyaDB-replication";

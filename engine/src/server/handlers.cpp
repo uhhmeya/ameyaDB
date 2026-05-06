@@ -1,7 +1,7 @@
-#include "headers/handlers.h"
-#include "headers/globals.h"
-#include "headers/db.h"
-#include "headers/wr.h"
+#include "../headers/handlers.h"
+#include "../headers/globals.h"
+#include "../headers/db.h"
+#include "../headers/wr.h"
 #include <thread>
 #include <unistd.h>
 
@@ -85,7 +85,6 @@ void handle_write(int client_fd) {
 
     uint8_t ack = 1;
     write(client_fd, &ack, sizeof(ack));
-    close(client_fd);
 }
 void handle_read(int client_fd) {
 
@@ -103,5 +102,4 @@ void handle_read(int client_fd) {
     uint32_t v_len = static_cast<uint32_t>(val.size());
     write(client_fd, &v_len, sizeof(v_len));
     write(client_fd, val.data(), v_len);
-    close(client_fd);
 }
