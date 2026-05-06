@@ -83,8 +83,8 @@ void dispatch(int client_fd) {
 
 int main(int argc, char* argv[]) {
 
-    // skip --- local testing
-    #ifndef TESTING
+    // skip
+    #ifndef local_test
         Aws::SDKOptions options;
         InitAPI(options);
         create_directories("/var/log/ameyaDB");
@@ -107,8 +107,8 @@ int main(int argc, char* argv[]) {
     int log_idx_of_last_entry_in_snap = load_snap();
     replay_wal(log_idx_of_last_entry_in_snap);
 
-    // skip -- local run_server_locally
-    #ifndef TESTING
+    // skip
+    #ifndef local_test
         thread([]() {
             poll_SQS();
         }).detach();

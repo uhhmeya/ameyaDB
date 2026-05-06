@@ -2,7 +2,7 @@
 
 cd engine/src/server
 
-g++ -std=c++20 -DTESTING -o test \
+g++ -std=c++20 -Dlocal_test -o test \
     main.cpp \
     handlers.cpp \
     db.cpp

@@ -5,14 +5,14 @@
 #include <thread>
 #include <unistd.h>
 
-#ifndef TESTING
+#ifndef local_test
     #include <aws/sns/SNSClient.h>
     #include <aws/sns/model/PublishRequest.h>
 #endif
 
 
 
-#ifndef TESTING
+#ifndef local_test
     static bool publish_SNS(const wr& w) {
         Aws::SNS::SNSClient sns;
         Aws::SNS::Model::PublishRequest req;
@@ -78,7 +78,7 @@ void handle_write(int client_fd) {
 
     apply_wr(w);
 
-    #ifndef TESTING
+    #ifndef local_test
         while (!publish_SNS(w))
             sleep_for(milliseconds(100));
     #endif
@@ -86,6 +86,7 @@ void handle_write(int client_fd) {
     uint8_t ack = 1;
     write(client_fd, &ack, sizeof(ack));
 }
+
 void handle_read(int client_fd) {
 
     auto k = read_k(client_fd);

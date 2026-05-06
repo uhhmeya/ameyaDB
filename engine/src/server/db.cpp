@@ -71,13 +71,13 @@ string apply_r(const string& k) {
 }
 
 void take_pictures() {
-    int idx_of_first_wr_in_prev_pic = 0;
+    int idx_during_prev_snap = 0;
     while (true) {
         sleep_for(seconds(5));
-        int idx_of_first_wr_in_cur_pic = log_index.load();
+        int idx_during_snap = log_index.load(); // snap happens here
 
-        if (idx_of_first_wr_in_cur_pic - idx_of_first_wr_in_prev_pic < 100)
-            continue;
+        if (idx_during_snap - idx_during_prev_snap < 100)
+            continue; // discard early snap
 
         str_arr_1D empty;
         {
@@ -87,6 +87,7 @@ void take_pictures() {
         str_arr_1D dk = empty;
 
 
+        // capture entries during snap
         str_arr_2D wip_snap_arr = prev_snap_arr;
         {
             shared_lock lock(db_mutex);
@@ -95,7 +96,7 @@ void take_pictures() {
         }
         str_arr_2D new_snap_arr = wip_snap_arr;
 
-        string snap_name = "snapshot." + to_string(idx_of_first_wr_in_cur_pic);
+        string snap_name = "snapshot." + to_string(idx_during_snap);
 
         ofstream f(SNAP_DIR_PATH + snap_name + ".tmp");
 
@@ -124,7 +125,7 @@ void take_pictures() {
                 ss >> t >> fn >> idx >> k >> v >> cs;
 
                 // put write in new wal if its either in the published snap or after it
-                if (!ss.fail() && idx > idx_of_first_wr_in_cur_pic)
+                if (!ss.fail() && idx > idx_during_snap)
                     new_wal << line << "\n";
             }
 
@@ -140,14 +141,14 @@ void take_pictures() {
         }
 
         prev_snap_arr = std::move(new_snap_arr);
-        idx_of_first_wr_in_prev_pic = idx_of_first_wr_in_cur_pic;
+        idx_during_prev_snap = idx_during_snap;
 
         // delete old snaps
         for (auto& entry : directory_iterator(SNAP_DIR_PATH)) {
             string name = entry.path().filename().string();
             if (name.rfind("snapshot.", 0) == 0 && name.ends_with(".bin")) {
                 uint32_t s = stoul(name.substr(9, name.size() - 13));
-                if (s < idx_of_first_wr_in_cur_pic)  // older than the one we just wrote
+                if (s < idx_during_snap)  // older than the one we just wrote
                     remove(entry.path());
             }
         }
