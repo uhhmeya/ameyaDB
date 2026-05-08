@@ -53,14 +53,23 @@ atomic<uint64_t> time_of_last_hb_received{0};
 
 int make_listener() {
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_fd < 0)
+        throw runtime_error("[make_listener] socket failed: " + string(strerror(errno)));
+
     int opt = 1;
     setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
     sockaddr_in addr{};
     addr.sin_family      = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
     addr.sin_port        = htons(8080);
-    bind(server_fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-    listen(server_fd, 10);
+
+    if (::bind(server_fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) < 0)
+        throw runtime_error("[make_listener] bind failed: " + string(strerror(errno)));
+
+    if (listen(server_fd, 10) < 0)
+        throw runtime_error("[make_listener] listen failed: " + string(strerror(errno)));
+
     cout << "node " << node_id << " listening on port 8080" << endl;
     return server_fd;
 }
@@ -104,8 +113,8 @@ int main(int argc, char* argv[]) {
         if (entry.path().extension() == ".tmp")
             remove(entry.path());
 
-    int log_idx_of_last_entry_in_snap = load_snap();
-    replay_wal(log_idx_of_last_entry_in_snap);
+    int idx_during_snap = load_snap();
+    replay_wal(idx_during_snap);
 
     // skip
     #ifndef local_test

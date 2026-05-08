@@ -35,8 +35,10 @@ static void del_SQS(Aws::SQS::SQSClient& sqs, const string& queue_url, const str
     del.SetReceiptHandle(receipt);
     auto result = sqs.DeleteMessage(del);
 
-    if (!result.IsSuccess())
-        throw runtime_error("[del_SQS] failed to delete message: " + result.GetError().GetMessage());
+    if (!result.IsSuccess()) {
+        cerr << "[del_SQS] failed to delete message: " << result.GetError().GetMessage() << endl;
+        exit(1);
+    }
 }
 
 void poll_SQS() {
@@ -68,8 +70,8 @@ void poll_SQS() {
             istringstream ss(raw);
             string k, v;
             uint64_t time_leader_received{0};
-            uint32_t forwarding_node{0}, log_index{0}, checksum{0};
-            ss >> time_leader_received >> forwarding_node >> log_index >> k >> v >> checksum;
+            uint32_t forwarding_node{0}, idx_of_wr{0}, checksum{0};
+            ss >> time_leader_received >> forwarding_node >> idx_of_wr >> k >> v >> checksum;
 
             // discard own message
             if (forwarding_node == static_cast<uint8_t>(node_id)) {
@@ -82,7 +84,7 @@ void poll_SQS() {
             w.v                    = v;
             w.time_leader_received = time_leader_received; // replication
             w.forwarding_node      = static_cast<uint8_t>(forwarding_node);
-            w.log_index            = log_index;
+            w.log_index            = idx_of_wr;
             w.checksum             = compute_checksum(w);
 
             // discard partial write
@@ -93,6 +95,11 @@ void poll_SQS() {
 
             // replicate !
             apply_wr(w);
+
+            // update log_idx
+            uint32_t prev = log_index.load();
+            while (w.log_index > prev && !log_index.compare_exchange_weak(prev, w.log_index)) {}
+
             del_SQS(sqs, queue_url, msg.GetReceiptHandle());
         }
     }

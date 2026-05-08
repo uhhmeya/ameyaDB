@@ -70,6 +70,7 @@ string apply_r(const string& k) {
     return it != db.end() ? it->second : "KEY_NOT_FOUND";
 }
 
+// idx during snap is usually last wr in snap
 void take_pictures() {
     int idx_during_prev_snap = 0;
     while (true) {
@@ -98,16 +99,16 @@ void take_pictures() {
 
         string snap_name = "snapshot." + to_string(idx_during_snap);
 
+        // make snap.203.tmp
         ofstream f(SNAP_DIR_PATH + snap_name + ".tmp");
 
         // write to snap.203.tmp
-        for (auto& [k, v] : new_snap_arr)
-            f << k << " " << v << "\n";
+        for (auto& [k, v] : new_snap_arr) f << k << " " << v << "\n";
 
-        f.flush(); // flush remaining writes to snap.203.tmp
-        f.close();
+        // flush remaining writes to snap.203.tmp
+        f.flush(); f.close();
 
-        // publish snap.203.bin via atomic rename
+        // publish snap.203.bin
         rename((SNAP_DIR_PATH + snap_name + ".tmp").c_str(), (SNAP_DIR_PATH + snap_name + ".bin").c_str());
 
         {
@@ -124,8 +125,8 @@ void take_pictures() {
                 uint64_t t; uint32_t fn, idx, cs; string k, v;
                 ss >> t >> fn >> idx >> k >> v >> cs;
 
-                // put write in new wal if its either in the published snap or after it
-                if (!ss.fail() && idx > idx_during_snap)
+                // discard entries before idx_during_snap
+                if (!ss.fail() && idx >= idx_during_snap)
                     new_wal << line << "\n";
             }
 
@@ -156,25 +157,25 @@ void take_pictures() {
 }
 
 int load_snap() {
-    int log_idx_of_last_WR_in_latest_snap = 0;
+    int idx_during_latest_snap = 0;
 
     // find latest snap
     for (auto& entry : directory_iterator(SNAP_DIR_PATH)) {
         string name = entry.path().filename().string();
         if (name.rfind("snapshot.", 0) == 0 && name.ends_with(".bin")) {
             uint32_t s = stoul(name.substr(9, name.size() - 13));
-            if (s > log_idx_of_last_WR_in_latest_snap)
-                log_idx_of_last_WR_in_latest_snap = s;
+            if (s > idx_during_latest_snap)
+                idx_during_latest_snap = s;
         }
     }
 
-    if (log_idx_of_last_WR_in_latest_snap == 0) {
+    if (idx_during_latest_snap == 0) {
         cerr << "[load_snap] No prev snap found — expected only on fresh deploy\n";
         return 0;
     }
 
     string latest_snap_path = SNAP_DIR_PATH + "snapshot." +
-        to_string(log_idx_of_last_WR_in_latest_snap) + ".bin";
+        to_string(idx_during_latest_snap) + ".bin";
 
     ifstream f(latest_snap_path);
 
@@ -184,7 +185,6 @@ int load_snap() {
 
     // extracts write
     string line;
-    unique_lock lock(db_mutex);
     while (getline(f, line)) {
         auto sp = line.find(' ');
         if (sp == string::npos) continue;
@@ -196,10 +196,10 @@ int load_snap() {
         prev_snap_arr[k] = v;
     }
 
-    return log_idx_of_last_WR_in_latest_snap;
+    return idx_during_latest_snap;
 }
 
-void replay_wal(int log_idx_of_last_WR_in_latest_snap) {
+void replay_wal(int idx_during_latest_snap) {
 
     // open WAL content
     ifstream f(WAL_PATH);
@@ -207,8 +207,8 @@ void replay_wal(int log_idx_of_last_WR_in_latest_snap) {
     if (!f.is_open())
         throw runtime_error("[replay_wal] could not open WAL content\n");
 
-    // handles case where snap covers all writes in WAL
-    int max_log_idx = log_idx_of_last_WR_in_latest_snap;
+    // handles case where idx_during_latest_snap is last write in WAL
+    int idx_of_last_wr_in_wal = idx_during_latest_snap;
 
     string line;
     while (getline(f, line)) {
@@ -226,7 +226,7 @@ void replay_wal(int log_idx_of_last_WR_in_latest_snap) {
             continue;
 
         // discard write covered by snapshot
-        if (idx_of_wr <= log_idx_of_last_WR_in_latest_snap)
+        if (idx_of_wr < idx_during_latest_snap)
             continue;
 
         wr w;
@@ -244,7 +244,7 @@ void replay_wal(int log_idx_of_last_WR_in_latest_snap) {
         db[w.k] = w.v;
         prev_snap_arr[w.k] = w.v;
 
-        max_log_idx = idx_of_wr;
+        idx_of_last_wr_in_wal = idx_of_wr;
     }
-    log_index.store(max_log_idx);
+    log_index.store(idx_of_last_wr_in_wal);
 }
