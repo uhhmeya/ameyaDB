@@ -10,8 +10,6 @@
     #include <aws/sns/model/PublishRequest.h>
 #endif
 
-
-
 #ifndef local_test
     static bool publish_SNS(const wr& w) {
         Aws::SNS::SNSClient sns;
@@ -83,8 +81,8 @@ void handle_write(int client_fd) {
             sleep_for(milliseconds(100));
     #endif
 
-    uint8_t ack = 1;
-    write(client_fd, &ack, sizeof(ack));
+    write(client_fd, &w.log_index, sizeof(w.log_index));
+
 }
 
 void handle_read(int client_fd) {

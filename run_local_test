@@ -1,7 +1,0 @@
-#!/bin/bash
-
-cd engine/src
-
-g++ -std=c++20 -o local_test local.cpp
-
-./local_test

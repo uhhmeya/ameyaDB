@@ -31,6 +31,17 @@ enum Role {
     LEADER
 };
 
+struct committed_wr {
+    string   k;
+    string   v;
+    uint32_t log_index;
+};
+
+#ifdef local_test
+inline const string GLOBAL_WAL_PATH = "server/global_wal.txt";
+inline const string SENTINEL_PATH   = "server/ready_to_crash";
+#endif
+
 extern int node_id;
 extern std::atomic<uint32_t> log_index;
 

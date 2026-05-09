@@ -11,7 +11,7 @@
 #include <filesystem>
 #include "../headers/db.h"
 
-#ifndef TESTING
+#ifndef local_test
     #include <aws/core/Aws.h>
 #endif
 
@@ -40,15 +40,15 @@ atomic<Role>     role{FOLLOWER};
 
 atomic<uint64_t> time_of_last_hb_received{0};
 
-// put snaps & wal in src during local run_server_locally
-#ifdef TESTING
-    const string SNAP_DIR_PATH = "./snapshots/";
-    const string WAL_PATH = "./wal.log";
+// put in SRC during local TEST
+#ifdef local_test
+    const string SNAP_DIR_PATH        = "./snapshots/";
+    const string WAL_PATH             = "./wal.log";
 
-// put snaps & wal in var/log/ameyaDB on ec2s
+// put in ROOT during EC2s
 #else
-    const string SNAP_DIR_PATH = "/var/log/ameyaDB/snapshots/";
-    const string WAL_PATH = "/var/log/ameyaDB/wal.log";
+const string SNAP_DIR_PATH = "/var/log/ameyaDB/snapshots/";
+const string WAL_PATH = "/var/log/ameyaDB/wal.log";
 #endif
 
 int make_listener() {

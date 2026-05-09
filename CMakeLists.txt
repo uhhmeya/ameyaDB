@@ -13,6 +13,6 @@ add_executable(ameyaDB_node ${SOURCES})
 target_include_directories(ameyaDB_node PRIVATE engine/src)
 target_link_libraries(ameyaDB_node ${AWSSDK_LINK_LIBRARIES})
 
-add_executable(local_test engine/src/local.cpp)
+add_executable(local_test engine/src/clients.cpp)
 target_include_directories(local_test PRIVATE engine/src)
 target_compile_definitions(local_test PRIVATE TESTING)
