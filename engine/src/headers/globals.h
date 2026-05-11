@@ -38,8 +38,8 @@ struct committed_wr {
 };
 
 #ifdef local_test
-inline const string GLOBAL_WAL_PATH = "server/global_wal.txt";
-inline const string SENTINEL_PATH   = "server/ready_to_crash";
+inline const string ACK_PATH      = "output/acks.txt";
+inline const string SENTINEL_PATH = "output/crash";
 #endif
 
 extern int node_id;

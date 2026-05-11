@@ -14,13 +14,8 @@ static const int NUM_THREADS       = 30;
 static const int WRITES_PER_THREAD = 1000;
 static const int KEYS_PER_THREAD   = 1000;
 
-/*
-* only committed writes go in global_wal
-* thread local wal MAY CONTAIN uncommitted writes!
-*/
-
-static mutex global_wal_lock;
-static vector<committed_wr> global_wal;
+static mutex ack_txt_lock;
+static vector<committed_wr> ack_txt;
 static atomic<bool>      did_signal{false};
 static int               min_acks_before_crash = 0;
 
@@ -31,7 +26,9 @@ static int connect_to_db() {
     addr.sin_port   = htons(PORT);
     inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
     if (connect(fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
-      close(fd); return -1;}
+        cerr << "[client] connection failed\n";
+        close(fd); return -1;
+    }
     return fd;
 }
 
@@ -74,6 +71,7 @@ static void send_wr(int num_writes, int thread_id) {
         thread_local_wal.push_back({k, v});
     }
 
+    cerr << "[thread " << thread_id << "] connected, fd=" << fd << "\n";
     for (int i = 0; i < num_writes; i++) {
         uint32_t log_idx = 0;
 
@@ -85,17 +83,17 @@ static void send_wr(int num_writes, int thread_id) {
              * This is the correctness trade off
              */
 
-        lock_guard lock(global_wal_lock);
+        lock_guard lock(ack_txt_lock);
 
         // append k v idx
-        global_wal.push_back({thread_local_wal[i].first, thread_local_wal[i].second, log_idx});
+        ack_txt.push_back({thread_local_wal[i].first, thread_local_wal[i].second, log_idx});
 
         // is it time to crash?
-        if (!did_signal.load() && (int)global_wal.size() >= min_acks_before_crash && !did_signal.exchange(true)) {
+        if (!did_signal.load() && (int)ack_txt.size() >= min_acks_before_crash && !did_signal.exchange(true)) {
 
             // dump global_wal into file
-            ofstream f(GLOBAL_WAL_PATH);
-            for (auto& w : global_wal)
+            ofstream f(ACK_PATH);
+            for (auto& w : ack_txt)
                 f << w.k << " " << w.v << " " << w.log_index << "\n";
             f.flush();
             f.close();
@@ -104,7 +102,6 @@ static void send_wr(int num_writes, int thread_id) {
             ofstream(SENTINEL_PATH).close();
         }
     }
-
     close(fd);
 }
 

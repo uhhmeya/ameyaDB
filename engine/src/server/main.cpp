@@ -40,15 +40,14 @@ atomic<Role>     role{FOLLOWER};
 
 atomic<uint64_t> time_of_last_hb_received{0};
 
-// put in SRC during local TEST
-#ifdef local_test
-    const string SNAP_DIR_PATH        = "./snapshots/";
-    const string WAL_PATH             = "./wal.log";
 
-// put in ROOT during EC2s
+#ifdef local_test
+const string SNAP_DIR_PATH = "../output/snaps/";
+const string WAL_PATH      = "../output/wal.txt";
+
 #else
-const string SNAP_DIR_PATH = "/var/log/ameyaDB/snapshots/";
-const string WAL_PATH = "/var/log/ameyaDB/wal.log";
+    const string SNAP_DIR_PATH = "/var/log/ameyaDB/snapshots/";
+    const string WAL_PATH = "/var/log/ameyaDB/wal.log";
 #endif
 
 int make_listener() {
@@ -76,17 +75,12 @@ int make_listener() {
 
 void dispatch(int client_fd) {
     char op = 0;
-
-    // only reads first byte in socket
     while (read(client_fd, &op, 1) == 1) {
-
         if (op == WRITE)
             handle_write(client_fd);
-
         else if (op == READ)
             handle_read(client_fd);
     }
-
     close(client_fd);
 }
 

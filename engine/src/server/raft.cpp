@@ -1,7 +1,6 @@
 #include "../headers/raft.h"
 #include "../headers/globals.h"
 #include <thread>
-#include <chrono>
 #include <cstdlib>
 
 void start_election() {

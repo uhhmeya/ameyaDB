@@ -74,7 +74,6 @@ string apply_r(const string& k) {
 void take_pictures() {
     int idx_during_prev_snap = 0;
     while (true) {
-        sleep_for(seconds(5));
         int idx_during_snap = log_index.load(); // snap happens here
 
         if (idx_during_snap - idx_during_prev_snap < 100)
@@ -97,19 +96,16 @@ void take_pictures() {
         }
         str_arr_2D new_snap_arr = wip_snap_arr;
 
-        string snap_name = "snapshot." + to_string(idx_during_snap);
+        string snap_name = "snap." + to_string(idx_during_snap);
 
-        // make snap.203.tmp
+        // buffer to temp
         ofstream f(SNAP_DIR_PATH + snap_name + ".tmp");
-
-        // write to snap.203.tmp
         for (auto& [k, v] : new_snap_arr) f << k << " " << v << "\n";
 
-        // flush remaining writes to snap.203.tmp
         f.flush(); f.close();
 
-        // publish snap.203.bin
-        rename((SNAP_DIR_PATH + snap_name + ".tmp").c_str(), (SNAP_DIR_PATH + snap_name + ".bin").c_str());
+        // publish snap
+        rename((SNAP_DIR_PATH + snap_name + ".tmp").c_str(), (SNAP_DIR_PATH + snap_name + ".txt").c_str());
 
         {
             lock_guard lock(wal_mutex);
@@ -127,10 +123,10 @@ void take_pictures() {
 
                 // discard entries before idx_during_snap
                 if (!ss.fail() && idx >= idx_during_snap)
-                    new_wal << line << "\n";
+                    new_wal << line << "\n"; // flush to buffer
             }
 
-            new_wal.flush();
+            new_wal.flush(); // make sure everything is in disk
             new_wal.close();
             old_wal.close();
 
@@ -147,12 +143,13 @@ void take_pictures() {
         // delete old snaps
         for (auto& entry : directory_iterator(SNAP_DIR_PATH)) {
             string name = entry.path().filename().string();
-            if (name.rfind("snapshot.", 0) == 0 && name.ends_with(".bin")) {
-                uint32_t s = stoul(name.substr(9, name.size() - 13));
+            if (name.rfind("snap.", 0) == 0 && name.ends_with(".txt")) {
+                uint32_t s = stoul(name.substr(5, name.size() - 9));
                 if (s < idx_during_snap)  // older than the one we just wrote
                     remove(entry.path());
             }
         }
+        sleep_for(seconds(1));
     }
 }
 
@@ -162,8 +159,8 @@ int load_snap() {
     // find latest snap
     for (auto& entry : directory_iterator(SNAP_DIR_PATH)) {
         string name = entry.path().filename().string();
-        if (name.rfind("snapshot.", 0) == 0 && name.ends_with(".bin")) {
-            uint32_t s = stoul(name.substr(9, name.size() - 13));
+        if (name.rfind("snap.", 0) == 0 && name.ends_with(".txt")) {
+            uint32_t s = stoul(name.substr(5, name.size() - 9));
             if (s > idx_during_latest_snap)
                 idx_during_latest_snap = s;
         }
@@ -174,8 +171,7 @@ int load_snap() {
         return 0;
     }
 
-    string latest_snap_path = SNAP_DIR_PATH + "snapshot." +
-        to_string(idx_during_latest_snap) + ".bin";
+    string latest_snap_path = SNAP_DIR_PATH + "snap." + to_string(idx_during_latest_snap) + ".txt";
 
     ifstream f(latest_snap_path);
 
