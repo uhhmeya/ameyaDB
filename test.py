@@ -13,7 +13,7 @@ WAL_PATH   = "engine/src/output/wal.txt"
 ACK_PATH   = "engine/src/output/acks.txt"
 SENTINEL   = "engine/src/output/crash"
 
-SERVER_PORT          = 8080
+SERVER_PORT = 8080
 MIN_ACKS_BEFORE_CRASH = 15000
 
 READ_OP = 2
@@ -22,6 +22,7 @@ def build():
 
     OUT = os.path.abspath("engine/src/output")
 
+    # compiles server ; wd = src.server
     subprocess.run(
         ["g++", "-std=c++20", "-Dlocal_test", "-o",
          f"{OUT}/binary/server_exec",
@@ -29,6 +30,7 @@ def build():
         cwd="engine/src/server", check=True
     )
 
+    # compiles client ; wd = src
     subprocess.run(
         ["g++", "-std=c++20", "-Dlocal_test", "-o",
          f"{OUT}/binary/local_clients_exec",

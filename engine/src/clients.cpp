@@ -71,17 +71,13 @@ static void send_wr(int num_writes, int thread_id) {
         thread_local_wal.push_back({k, v});
     }
 
-    cerr << "[thread " << thread_id << "] connected, fd=" << fd << "\n";
     for (int i = 0; i < num_writes; i++) {
         uint32_t log_idx = 0;
 
         // server crashed
         if (read(fd, &log_idx, sizeof(log_idx)) != sizeof(log_idx))
             break;
-            /*
-             * we don't know order of writes committed beyond this point
-             * This is the correctness trade off
-             */
+            // out of order ack problem applies here
 
         lock_guard lock(ack_txt_lock);
 
