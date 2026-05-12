@@ -15,7 +15,7 @@ static const int WRITES_PER_THREAD = 1000;
 static const int KEYS_PER_THREAD   = 1000;
 
 static mutex ack_txt_lock;
-static vector<committed_wr> ack_txt;
+static vector<committed_wr> ack_txt_arr;
 static atomic<bool>      did_signal{false};
 static int               min_acks_before_crash = 0;
 
@@ -81,15 +81,15 @@ static void send_wr(int num_writes, int thread_id) {
 
         lock_guard lock(ack_txt_lock);
 
-        // append k v idx
-        ack_txt.push_back({thread_local_wal[i].first, thread_local_wal[i].second, log_idx});
+        // append k v idx to ack.txt
+        ack_txt_arr.push_back({thread_local_wal[i].first, thread_local_wal[i].second, log_idx});
 
         // is it time to crash?
-        if (!did_signal.load() && (int)ack_txt.size() >= min_acks_before_crash && !did_signal.exchange(true)) {
+        if (!did_signal.load() && (int)ack_txt_arr.size() >= min_acks_before_crash && !did_signal.exchange(true)) {
 
-            // dump global_wal into file
+            // dump ack_txt_arr into ACK.TXT file on disk
             ofstream f(ACK_PATH);
-            for (auto& w : ack_txt)
+            for (auto& w : ack_txt_arr)
                 f << w.k << " " << w.v << " " << w.log_index << "\n";
             f.flush();
             f.close();

@@ -18,26 +18,6 @@ MIN_ACKS_BEFORE_CRASH = 15000
 
 READ_OP = 2
 
-def build():
-
-    OUT = os.path.abspath("engine/src/output")
-
-    # compiles server ; wd = src.server
-    subprocess.run(
-        ["g++", "-std=c++20", "-Dlocal_test", "-o",
-         f"{OUT}/binary/server_exec",
-         "main.cpp", "handlers.cpp", "db.cpp"],
-        cwd="engine/src/server", check=True
-    )
-
-    # compiles client ; wd = src
-    subprocess.run(
-        ["g++", "-std=c++20", "-Dlocal_test", "-o",
-         f"{OUT}/binary/local_clients_exec",
-         "clients.cpp"],
-        cwd="engine/src", check=True
-    )
-
 def start_local_server(timeout=10):
     p = subprocess.Popen(["../output/binary/server_exec", "0"], cwd=SERVER_DIR)
     for _ in range(timeout * 10):
@@ -52,21 +32,10 @@ def start_local_server(timeout=10):
             time.sleep(0.1)
     raise RuntimeError("[server] never came up")
 
-def clear_zombies():
-    try:
-        s = socket.create_connection(("127.0.0.1", SERVER_PORT), timeout=0.5)
-        s.close()
-        result = subprocess.run(["lsof", "-t", f"-i:{SERVER_PORT}"], capture_output=True, text=True)
-        for pid in result.stdout.strip().splitlines():
-            os.kill(int(pid), signal.SIGKILL)
-    except (ConnectionRefusedError, socket.timeout):
-        pass
-
 def crash_local_server(proc):
     proc.send_signal(signal.SIGKILL)
     proc.wait()
     print(f"[server] killed")
-
 
 def start_local_clients():
     p = subprocess.Popen(
@@ -75,14 +44,6 @@ def start_local_clients():
     )
     print(f"[client] started (pid {p.pid})")
     return p
-
-# waits for 30s
-def wait_for_sentinel(timeout=30):
-    for _ in range(timeout * 10):
-        if os.path.exists(SENTINEL):
-            return
-        time.sleep(0.1)
-    raise RuntimeError("[sentinel] timed out waiting for ready_to_crash")
 
 def compute_expected(global_wal_path):
     expected  = {}   # k -> v
@@ -141,27 +102,59 @@ def assert_db_state(expected):
         assert actual == v, \
             f"[FAIL] key {k}: expected {v} got {actual}"
 
-def cleanup():
+
+def main():
+
+    # clear zombies
+    zombie = subprocess.run(["lsof", "-t", f"-i:{SERVER_PORT}"], capture_output=True, text=True)
+    for pid in zombie.stdout.strip().splitlines():
+        os.kill(int(pid), signal.SIGKILL)
+        print(f" [test.py -> main] removed zombie({pid})")
+
+    # remove old files (does not delete directories)
     if os.path.exists(SNAP_DIR):
         for file in os.listdir(SNAP_DIR): os.remove(os.path.join(SNAP_DIR, file))
     if os.path.exists(WAL_PATH): os.remove(WAL_PATH)
     if os.path.exists(ACK_PATH): os.remove(ACK_PATH)
     if os.path.exists(SENTINEL): os.remove(SENTINEL)
 
-def main():
+    # will work on other machines
+    OUTPUT = os.path.abspath("engine/src/output")
 
-    clear_zombies()
-    cleanup()
-    build()
+    # compiles local server ; wd = src.server
+    subprocess.run(
+        ["g++", "-std=c++20", "-Dlocal_test", "-o",
+         f"{OUTPUT}/binary/server_exec",
+         "main.cpp", "handlers.cpp", "db.cpp"],
+        cwd="engine/src/server", check=True
+    )
 
+    # compiles client ; wd = src
+    subprocess.run(
+        ["g++", "-std=c++20", "-Dlocal_test", "-o",
+         f"{OUTPUT}/binary/local_clients_exec",
+         "clients.cpp"],
+        cwd="engine/src", check=True
+    )
+
+    # start test
     local_server = start_local_server()
     local_client = start_local_clients()
 
-    wait_for_sentinel()
-    print("[sentinel] ready_to_crash received")
+    # find sentinel
+    timed_out = True
+    for _ in range(300):
+        if os.path.exists(SENTINEL):
+            timed_out = False
+            break
+        time.sleep(0.1)
+    if timed_out:
+        raise RuntimeError("[test.py -> main] sentinel not found after 30s")
 
-    crash_local_server(local_server)
+    # crash local server
+    local_server.send_signal(signal.SIGKILL)
 
+    local_server.wait()
     local_client.wait()
 
     expected_db = compute_expected(ACK_PATH)

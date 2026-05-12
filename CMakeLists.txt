@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_PREFIX_PATH "/opt/homebrew")
 
 find_package(AWSSDK REQUIRED COMPONENTS core sns sqs)
-
+add_definitions(-Dlocal_test)
 file(GLOB_RECURSE SOURCES engine/src/server/*.cpp)
 add_executable(ameyaDB_node ${SOURCES})
 target_include_directories(ameyaDB_node PRIVATE engine/src)
