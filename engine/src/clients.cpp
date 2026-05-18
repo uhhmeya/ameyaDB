@@ -2,22 +2,22 @@
 #include <thread>
 #include <vector>
 #include <string>
-#include <cassert>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <chrono>
+#include <random>
+#include <__random/random_device.h>
+
 #include "headers/globals.h"
 
-static const int PORT              = 8080;
-static const int NUM_THREADS       = 30;
-static const int WRITES_PER_THREAD = 1000;
-static const int KEYS_PER_THREAD   = 1000;
+using namespace std::chrono_literals;
 
-static mutex ack_txt_lock;
-static vector<committed_wr> ack_txt_arr;
-static atomic<bool>      did_signal{false};
-static int               min_acks_before_crash = 0;
+static const int PORT = 8080;
+static const int num_clients = 30;
+static const int key_pool = 20;
+static const int val_pool = 100;
 
 static int connect_to_db() {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -32,35 +32,18 @@ static int connect_to_db() {
     return fd;
 }
 
-static string send_r(const string& k) {
-    int fd = connect_to_db();
-    if (fd < 0) return "CONNECTION_FAILED";
+static void send_wr() {
+    thread_local mt19937 rng(random_device{}());
+    uniform_int_distribution kdist(0, key_pool - 1);
+    uniform_int_distribution vdist(0, val_pool - 1);
 
-    uint8_t op = READ;
-    uint32_t k_len = k.size();
-    write(fd, &op,      1);
-    write(fd, &k_len,   4);
-    write(fd, k.data(), k_len);
-
-    uint32_t v_len = 0;
-    read(fd, &v_len, 4);
-    string v(v_len, '\0');
-    if (v_len > 0) read(fd, &v[0], v_len);
-    close(fd);
-    return v;
-}
-
-static void send_wr(int num_writes, int thread_id) {
     int fd = connect_to_db();
     if (fd < 0) throw runtime_error("failed to connect to DB");
 
-    vector<pair<string,string>> thread_local_wal;
-
-    // send all writes concurrently
-    for (int i = 0; i < num_writes; i++) {
-        uint8_t op = WRITE;
-        string k = "k" + to_string(thread_id * KEYS_PER_THREAD + i % KEYS_PER_THREAD);
-        string v = "v" + to_string(rand() % 1000);
+    while (true) {
+        uint8_t  op    = WRITE;
+        string   k     = "k" + to_string(kdist(rng));
+        string   v     = "v" + to_string(vdist(rng));
         uint32_t k_len = k.size();
         uint32_t v_len = v.size();
         write(fd, &op,      1);
@@ -68,49 +51,13 @@ static void send_wr(int num_writes, int thread_id) {
         write(fd, k.data(), k_len);
         write(fd, &v_len,   4);
         write(fd, v.data(), v_len);
-        thread_local_wal.push_back({k, v});
     }
-
-    for (int i = 0; i < num_writes; i++) {
-        uint32_t log_idx = 0;
-
-        // server crashed
-        if (read(fd, &log_idx, sizeof(log_idx)) != sizeof(log_idx))
-            break;
-            // out of order ack problem applies here
-
-        lock_guard lock(ack_txt_lock);
-
-        // append k v idx to ack.txt
-        ack_txt_arr.push_back({thread_local_wal[i].first, thread_local_wal[i].second, log_idx});
-
-        // is it time to crash?
-        if (!did_signal.load() && (int)ack_txt_arr.size() >= min_acks_before_crash && !did_signal.exchange(true)) {
-
-            // dump ack_txt_arr into ACK.TXT file on disk
-            ofstream f(ACK_PATH);
-            for (auto& w : ack_txt_arr)
-                f << w.k << " " << w.v << " " << w.log_index << "\n";
-            f.flush();
-            f.close();
-
-            // tell python to crash
-            ofstream(SENTINEL_PATH).close();
-        }
-    }
-    close(fd);
 }
 
-int main(int argc, char* argv[]) {
-
-    if (argc < 2)
-        throw runtime_error("usage: ./run_clients <min_acks_before_crash>");
-
-    min_acks_before_crash = stoi(argv[1]);
-
+int main() {
     vector<thread> clients;
-    for (int i = 0; i < NUM_THREADS; i++)
-        clients.emplace_back(send_wr, WRITES_PER_THREAD, i);
+    for (int i = 0; i < num_clients; i++)
+        clients.emplace_back(send_wr);
     for (auto& t : clients)
         t.join();
     return 0;

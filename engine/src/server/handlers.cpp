@@ -23,7 +23,6 @@
 // socket read utils
 static bool read_tcp(int client_fd, void* buf, size_t n) {
     size_t received = 0;
-
     while (received < n) {
         ssize_t r = read(client_fd, static_cast<char*>(buf) + received, n - received);
         if (r == 0) return false;
@@ -55,35 +54,38 @@ static optional<string> read_k(int client_fd) {
 }
 
 void handle_write(int client_fd) {
+        auto kv = read_kv(client_fd);
 
-    auto kv = read_kv(client_fd);
+        if (!kv) {
+            close(client_fd);
+            return;
+        }
 
-    // client sends bad data
-    if (!kv) {
-        close(client_fd);
-        return;
-    }
+        auto [k, v] = *kv;
 
-    auto [k, v] = *kv;
+        wr w;
+        w.k                    = k;
+        w.v                    = v;
+        w.time_leader_received = now_ms();
+        w.forwarding_node      = static_cast<uint8_t>(node_id);
+        w.log_index            = ++log_index;
+        w.checksum             = compute_checksum(w);
 
-    wr w;
-    w.k                    = k;
-    w.v                    = v;
-    w.time_leader_received = now_ms(); // tcp write
-    w.forwarding_node      = static_cast<uint8_t>(node_id);
-    w.log_index            = ++log_index;
-    w.checksum             = compute_checksum(w);
+        apply_wr(w);
 
-    apply_wr(w);
-
-    #ifndef local_test
+#ifndef local_test
         while (!publish_SNS(w))
             sleep_for(milliseconds(100));
-    #endif
+#endif
 
-    write(client_fd, &w.log_index, sizeof(w.log_index));
-
-}
+        uint32_t k_len = w.k.size();
+        uint32_t v_len = w.v.size();
+        write(client_fd, &k_len,       4);
+        write(client_fd, w.k.data(),   k_len);
+        write(client_fd, &v_len,       4);
+        write(client_fd, w.v.data(),   v_len);
+        write(client_fd, &w.log_index, sizeof(w.log_index));
+    }
 
 void handle_read(int client_fd) {
 

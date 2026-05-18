@@ -17,8 +17,8 @@
 
 /**
     === KV FORMAT ===
-key = k0 --> k9
-val = v0 --> v999
+key = k0 --> k20
+val = v0 --> v100
 
     === CLIENT TCP FORMAT ===
 tcp wr = op klen k vlen v
@@ -42,9 +42,8 @@ atomic<uint64_t> time_of_last_hb_received{0};
 
 
 #ifdef local_test
-const string SNAP_DIR_PATH = "../output/snaps/";
-const string WAL_PATH      = "../output/wal.txt";
-
+    const string SNAP_DIR_PATH = "../output/snaps/";
+    const string WAL_PATH      = "../output/wal.txt";
 #else
     const string SNAP_DIR_PATH = "/var/log/ameyaDB/snapshots/";
     const string WAL_PATH = "/var/log/ameyaDB/wal.log";
@@ -68,8 +67,6 @@ int make_listener() {
 
     if (listen(server_fd, 10) < 0)
         throw runtime_error("[make_listener] listen failed: " + string(strerror(errno)));
-
-    cout << "node " << node_id << " listening on port 8080" << endl;
     return server_fd;
 }
 
@@ -100,15 +97,18 @@ int main(int argc, char* argv[]) {
 
     // does not open WAL content
     if (!wal.is_open())
-        throw runtime_error(" [main] could not setup write handler");
+        throw runtime_error("[main] could not setup write handler");
 
-    // delete tmp snaps
+    cout << "[main] tmp exists: " << exists(WAL_PATH + ".tmp") << "\n";
+    cout << "[main] tmp path: " << absolute(WAL_PATH + ".tmp") << "\n";
+
     for (auto& entry : directory_iterator(SNAP_DIR_PATH))
-        if (entry.path().extension() == ".tmp")
-            remove(entry.path());
+        if (entry.path().extension() == ".tmp") remove(entry.path());
+    if (exists(WAL_PATH + ".tmp")) remove(WAL_PATH + ".tmp");
 
-    int idx_during_snap = load_snap();
-    replay_wal(idx_during_snap);
+    int idx_dur_snap = load_snap();
+    truncate_wal(idx_dur_snap);
+    replay_wal(idx_dur_snap);
 
     // skip
     #ifndef local_test

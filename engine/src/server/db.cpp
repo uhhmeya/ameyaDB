@@ -11,12 +11,7 @@
 #include <sstream>
 #include <cstdio>
 
-
-// accessed during replay_wal() & load_snap() on single thread boot
-// accessed by take_pics() by snap bthread
 static str_arr_2D prev_snap_arr;
-
-// shared by workers and snap_bthread
 static str_arr_1D dk;
 static mutex dk_mutex;
 
@@ -35,12 +30,12 @@ uint32_t compute_checksum(const wr& w) {
     return crc ^ 0xFFFFFFFF;
 }
 string serialize_wr(const wr& w) {
-    return to_string(w.time_leader_received)        + " " +
-           to_string(w.forwarding_node)      + " " +
-           to_string(w.log_index)        + " " +
-           w.k                   + " " +
-           w.v                   + " " +
-           to_string(w.checksum) + "\n";
+    return w.k                              + " " +
+           w.v                              + " " +
+           to_string(w.log_index)           + " " +
+           to_string(w.checksum)            + " " +
+           to_string(w.forwarding_node)     + " " +
+           to_string(w.time_leader_received) + "\n";
 }
 
 void apply_wr(const wr& w) {
@@ -70,14 +65,34 @@ string apply_r(const string& k) {
     return it != db.end() ? it->second : "KEY_NOT_FOUND";
 }
 
-// idx during snap is usually last wr in snap
+void truncate_wal(int idx_during_snap) {
+    lock_guard lock(wal_mutex);
+    ifstream old_wal(WAL_PATH);
+    ofstream new_wal(WAL_PATH + string(".tmp"));
+
+    string line;
+    while (getline(old_wal, line)) {
+        if (line.empty()) continue;
+        istringstream ss(line);
+        string k, v; uint32_t idx, cs, fn; uint64_t t;
+        ss >> k >> v >> idx >> cs >> fn >> t;
+
+        if (ss.fail()) continue;
+
+        if (idx >= idx_during_snap)
+            new_wal << line << "\n";
+    }
+    new_wal.flush(); new_wal.close(); old_wal.close();
+
+    rename((WAL_PATH + string(".tmp")).c_str(), WAL_PATH.c_str());
+    wal.close(); wal.open(WAL_PATH, ios::app);
+}
+
 void take_pictures() {
     int idx_during_prev_snap = 0;
     while (true) {
-        int idx_during_snap = log_index.load(); // snap happens here
-
-        if (idx_during_snap - idx_during_prev_snap < 100)
-            continue; // discard early snap
+        int idx_during_snap = log_index.load(); // take pic
+        if (idx_during_snap - idx_during_prev_snap < 100) continue;
 
         str_arr_1D empty;
         {
@@ -86,8 +101,6 @@ void take_pictures() {
         }
         str_arr_1D dk = empty;
 
-
-        // capture entries during snap
         str_arr_2D wip_snap_arr = prev_snap_arr;
         {
             shared_lock lock(db_mutex);
@@ -96,134 +109,66 @@ void take_pictures() {
         }
         str_arr_2D new_snap_arr = wip_snap_arr;
 
-        string snap_name = "snap." + to_string(idx_during_snap);
-
-        // buffer to temp
-        ofstream f(SNAP_DIR_PATH + snap_name + ".tmp");
+        // snap.tmp --> snap.txt
+        ofstream f(SNAP_DIR_PATH + "snap" + ".tmp");
+        f << idx_during_snap << "\n";
         for (auto& [k, v] : new_snap_arr) f << k << " " << v << "\n";
-
         f.flush(); f.close();
+        rename((SNAP_DIR_PATH + "snap" + ".tmp").c_str(), (SNAP_DIR_PATH + "snap").c_str());
 
-        // publish snap
-        rename((SNAP_DIR_PATH + snap_name + ".tmp").c_str(), (SNAP_DIR_PATH + snap_name + ".txt").c_str());
-
-        {
-            lock_guard lock(wal_mutex);
-
-            ifstream old_wal(WAL_PATH); // wal.log
-            ofstream new_wal(WAL_PATH + string(".tmp")); // wal.log.tmp
-
-            // read from old wal
-            string line;
-            while (getline(old_wal, line)) {
-                if (line.empty()) continue;
-                istringstream ss(line);
-                uint64_t t; uint32_t fn, idx, cs; string k, v;
-                ss >> t >> fn >> idx >> k >> v >> cs;
-
-                // discard entries before idx_during_snap
-                if (!ss.fail() && idx >= idx_during_snap)
-                    new_wal << line << "\n"; // flush to buffer
-            }
-
-            new_wal.flush(); // make sure everything is in disk
-            new_wal.close();
-            old_wal.close();
-
-            // publish truncated wal via atomic rename
-            rename((WAL_PATH + string(".tmp")).c_str(), WAL_PATH.c_str());
-
-            wal.close();
-            wal.open(WAL_PATH, ios::app);
-        }
-
-        prev_snap_arr = std::move(new_snap_arr);
+        truncate_wal(idx_during_snap);
+        prev_snap_arr = std::move(new_snap_arr); // for diff
         idx_during_prev_snap = idx_during_snap;
-
-        // delete old snaps
-        for (auto& entry : directory_iterator(SNAP_DIR_PATH)) {
-            string name = entry.path().filename().string();
-            if (name.rfind("snap.", 0) == 0 && name.ends_with(".txt")) {
-                uint32_t s = stoul(name.substr(5, name.size() - 9));
-                if (s < idx_during_snap)  // older than the one we just wrote
-                    remove(entry.path());
-            }
-        }
         sleep_for(seconds(1));
     }
 }
 
 int load_snap() {
-    int idx_during_latest_snap = 0;
+    ifstream f(SNAP_DIR_PATH + "snap");
 
-    // find latest snap
-    for (auto& entry : directory_iterator(SNAP_DIR_PATH)) {
-        string name = entry.path().filename().string();
-        if (name.rfind("snap.", 0) == 0 && name.ends_with(".txt")) {
-            uint32_t s = stoul(name.substr(5, name.size() - 9));
-            if (s > idx_during_latest_snap)
-                idx_during_latest_snap = s;
-        }
-    }
-
-    if (idx_during_latest_snap == 0) {
+    if (!f.is_open()) {
         cerr << "[load_snap] No prev snap found — expected only on fresh deploy\n";
         return 0;
     }
 
-    string latest_snap_path = SNAP_DIR_PATH + "snap." + to_string(idx_during_latest_snap) + ".txt";
-
-    ifstream f(latest_snap_path);
-
-    // necessary because getLine fails silently
-    if (!f.is_open())
-        throw runtime_error("[load_snap] Could not open snapshot: " + latest_snap_path);
-
-    // extracts write
     string line;
+    getline(f, line);
+    int snap_idx = stoi(line);
+
     while (getline(f, line)) {
         auto sp = line.find(' ');
         if (sp == string::npos) continue;
         string k = line.substr(0, sp);
         string v = line.substr(sp + 1);
-
-        // writes to db & prev_snap
         db[k] = v;
         prev_snap_arr[k] = v;
     }
 
-    return idx_during_latest_snap;
+    return snap_idx;
 }
 
-void replay_wal(int idx_during_latest_snap) {
+void replay_wal(int idx_dur_snap) {
 
-    // open WAL content
     ifstream f(WAL_PATH);
 
     if (!f.is_open())
         throw runtime_error("[replay_wal] could not open WAL content\n");
 
     // handles case where idx_during_latest_snap is last write in WAL
-    int idx_of_last_wr_in_wal = idx_during_latest_snap;
+    int idx_of_last_wr_in_wal = idx_dur_snap;
 
     string line;
     while (getline(f, line)) {
         if (line.empty()) continue;
 
-        // extract write
         istringstream ss(line);
         uint64_t time_leader_received;
         uint32_t forwarding_node, idx_of_wr, checksum;
         string k, v;
-        ss >> time_leader_received >> forwarding_node >> idx_of_wr >> k >> v >> checksum;
+        ss >> k >> v >> idx_of_wr >> checksum >> forwarding_node >> time_leader_received;
 
-        // discard partial write
-        if (ss.fail())
-            continue;
-
-        // discard write covered by snapshot
-        if (idx_of_wr < idx_during_latest_snap)
-            continue;
+        if (ss.fail()) continue; // partial
+        if (idx_of_wr < idx_dur_snap) continue; // covered by snap
 
         wr w;
         w.k = k;
@@ -233,9 +178,8 @@ void replay_wal(int idx_during_latest_snap) {
         w.log_index = idx_of_wr;
         w.checksum = compute_checksum(w);
 
-        // discard partial write
-        if (w.checksum != checksum)
-            continue;
+        // partial
+        if (w.checksum != checksum) continue;
 
         db[w.k] = w.v;
         prev_snap_arr[w.k] = w.v;

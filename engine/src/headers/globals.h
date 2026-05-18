@@ -31,17 +31,6 @@ enum Role {
     LEADER
 };
 
-struct committed_wr {
-    string   k;
-    string   v;
-    uint32_t log_index;
-};
-
-#ifdef local_test
-inline const string ACK_PATH      = "output/acks.txt";
-inline const string SENTINEL_PATH = "output/crash";
-#endif
-
 extern int node_id;
 extern std::atomic<uint32_t> log_index;
 
