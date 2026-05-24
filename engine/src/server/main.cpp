@@ -1,53 +1,22 @@
 #include <iostream>
 #include <thread>
 #include <shared_mutex>
-#include <unordered_map>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
 #include "../headers/globals.h"
-#include "../headers/handlers.h"
-#include "../headers/sqs.h"
-#include <filesystem>
-#include "../headers/db.h"
-
-#ifndef local_test
-    #include <aws/core/Aws.h>
-#endif
-
-/**
-    === KV FORMAT ===
-key = k0 --> k20
-val = v0 --> v100
-
-    === CLIENT TCP FORMAT ===
-tcp wr = op klen k vlen v
-tcp r = op klen k
-*/
 
 int node_id;
 atomic<uint32_t> log_index{0};
 
-unordered_map<string, string> db;
-ofstream wal;
+void handle_write(int x);
+void handle_read(int x);
 
-shared_mutex db_mutex;
-mutex wal_mutex;
-
-atomic<uint32_t> term{0};
-atomic<int>      vote{-1};
-atomic<Role>     role{FOLLOWER};
-
-atomic<uint64_t> time_of_last_hb_received{0};
-
-
-#ifdef local_test
-    const string SNAP_DIR_PATH = "../output/snaps/";
-    const string WAL_PATH      = "../output/wal.txt";
-#else
-    const string SNAP_DIR_PATH = "/var/log/ameyaDB/snapshots/";
-    const string WAL_PATH = "/var/log/ameyaDB/wal.log";
-#endif
+void ensure_walsnap_open();
+void remove_temp_snap();
+void take_pictures();
+int load_snap();
+void replay_wal(int x);
 
 int make_listener() {
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -83,39 +52,13 @@ void dispatch(int client_fd) {
 
 int main(int argc, char* argv[]) {
 
-    // skip
-    #ifndef local_test
-        Aws::SDKOptions options;
-        InitAPI(options);
-        create_directories("/var/log/ameyaDB");
-    #endif
-
     node_id = stoi(argv[1]);
 
-    create_directories(SNAP_DIR_PATH);
-    wal.open(WAL_PATH, ios::app);
-
-    // does not open WAL content
-    if (!wal.is_open())
-        throw runtime_error("[main] could not setup write handler");
-
-    cout << "[main] tmp exists: " << exists(WAL_PATH + ".tmp") << "\n";
-    cout << "[main] tmp path: " << absolute(WAL_PATH + ".tmp") << "\n";
-
-    for (auto& entry : directory_iterator(SNAP_DIR_PATH))
-        if (entry.path().extension() == ".tmp") remove(entry.path());
-    if (exists(WAL_PATH + ".tmp")) remove(WAL_PATH + ".tmp");
-
+    ensure_walsnap_open();
+    remove_temp_snap();
     int idx_dur_snap = load_snap();
     truncate_wal(idx_dur_snap);
     replay_wal(idx_dur_snap);
-
-    // skip
-    #ifndef local_test
-        thread([]() {
-            poll_SQS();
-        }).detach();
-    #endif
 
     thread([]() {
         take_pictures();

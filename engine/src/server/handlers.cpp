@@ -1,24 +1,9 @@
-#include "../headers/handlers.h"
-#include "../headers/globals.h"
-#include "../headers/db.h"
-#include "../headers/wr.h"
 #include <thread>
 #include <unistd.h>
+#include "../headers/globals.h"
 
-#ifndef local_test
-    #include <aws/sns/SNSClient.h>
-    #include <aws/sns/model/PublishRequest.h>
-#endif
-
-#ifndef local_test
-    static bool publish_SNS(const wr& w) {
-        Aws::SNS::SNSClient sns;
-        Aws::SNS::Model::PublishRequest req;
-        req.SetTopicArn(SNS_TOPIC_ARN);
-        req.SetMessage(serialize_wr(w));
-        return sns.Publish(req).IsSuccess();
-    }
-#endif
+void apply_wr(const wr& w);
+string apply_r(const string& k);
 
 // socket read utils
 static bool read_tcp(int client_fd, void* buf, size_t n) {
@@ -72,11 +57,6 @@ void handle_write(int client_fd) {
         w.checksum             = compute_checksum(w);
 
         apply_wr(w);
-
-#ifndef local_test
-        while (!publish_SNS(w))
-            sleep_for(milliseconds(100));
-#endif
 
         uint32_t k_len = w.k.size();
         uint32_t v_len = w.v.size();

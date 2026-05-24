@@ -67,7 +67,7 @@ def main():
     subprocess.run(
         ["g++", "-std=c++20", "-Dlocal_test", "-o",
          f"{OUTPUT}/binary/server_exec",
-         "main.cpp", "handlers.cpp", "db.cpp"],
+         "main.cpp", "handlers.cpp", "walsnap.cpp"],
         cwd="engine/src/server", check=True
     )
 

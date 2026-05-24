@@ -1,4 +1,4 @@
-#include "../headers/db.h"
+#include "../headers/walsnap.h"
 #include "../headers/wr.h"
 #include "../headers/globals.h"
 #include <fstream>
@@ -11,25 +11,19 @@
 #include <sstream>
 #include <cstdio>
 
+static const string SNAP_DIR_PATH = "../output/snaps/";
+static const string WAL_PATH      = "../output/wal.txt";
+
+static unordered_map<string, string> db;
+static shared_mutex db_mutex;
+static ofstream wal;
+static mutex wal_mutex;
 static str_arr_2D prev_snap_arr;
 static str_arr_1D dk;
 static mutex dk_mutex;
 
-uint32_t compute_checksum(const wr& w) {
-    uint32_t crc = 0xFFFFFFFF;
-    string data = to_string(w.time_leader_received)   +
-                  to_string(w.forwarding_node) +
-                  to_string(w.log_index)   +
-                  w.k               +
-                  w.v;
-    for (char c : data) {
-        crc ^= static_cast<uint8_t>(c);
-        for (int j = 0; j < 8; j++)
-            crc = (crc >> 1) ^ (0xEDB88320 & -(crc & 1));
-    }
-    return crc ^ 0xFFFFFFFF;
-}
-string serialize_wr(const wr& w) {
+
+static string serialize_wr(const wr& w) {
     return w.k                              + " " +
            w.v                              + " " +
            to_string(w.log_index)           + " " +
@@ -38,6 +32,7 @@ string serialize_wr(const wr& w) {
            to_string(w.time_leader_received) + "\n";
 }
 
+// commit
 void apply_wr(const wr& w) {
     string str_wr = serialize_wr(w);
 
@@ -58,13 +53,24 @@ void apply_wr(const wr& w) {
     }
 
 }
-
 string apply_r(const string& k) {
     shared_lock lock(db_mutex);
     auto it = db.find(k);
     return it != db.end() ? it->second : "KEY_NOT_FOUND";
 }
 
+// wal snap stuff
+void ensure_walsnap_open() {
+    create_directories(SNAP_DIR_PATH);
+    wal.open(WAL_PATH, ios::app);
+    if (!wal.is_open())
+        throw runtime_error("[main] could not setup write handler");
+}
+void remove_temp_snap() {
+    for (auto& entry : directory_iterator(SNAP_DIR_PATH))
+        if (entry.path().extension() == ".tmp") remove(entry.path());
+    if (exists(WAL_PATH + ".tmp")) remove(WAL_PATH + ".tmp");
+}
 void truncate_wal(int idx_during_snap) {
     lock_guard lock(wal_mutex);
     ifstream old_wal(WAL_PATH);
@@ -87,7 +93,6 @@ void truncate_wal(int idx_during_snap) {
     rename((WAL_PATH + string(".tmp")).c_str(), WAL_PATH.c_str());
     wal.close(); wal.open(WAL_PATH, ios::app);
 }
-
 void take_pictures() {
     int idx_during_prev_snap = 0;
     while (true) {
@@ -122,7 +127,6 @@ void take_pictures() {
         sleep_for(seconds(1));
     }
 }
-
 int load_snap() {
     ifstream f(SNAP_DIR_PATH + "snap");
 
@@ -146,7 +150,6 @@ int load_snap() {
 
     return snap_idx;
 }
-
 void replay_wal(int idx_dur_snap) {
 
     ifstream f(WAL_PATH);
