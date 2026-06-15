@@ -66,8 +66,10 @@ inline uint32_t compute_checksum(const wr& w) {
     return crc ^ 0xFFFFFFFF;
 }
 
-// shared utils
-void truncate_wal(int idx_during_snap);
+// shared
+void truncate_wal(int idx_during_snap); // handlers + walsnap
+
+// replay : walsnap
 
 
 // AWS ---------------------------------------------------

@@ -14,7 +14,7 @@ void handle_read(int x);
 
 void ensure_walsnap_open();
 void remove_temp_snap();
-void take_pictures();
+void take_pics();
 int load_snap();
 void replay_wal(int x);
 
@@ -51,9 +51,7 @@ void dispatch(int client_fd) {
 }
 
 int main(int argc, char* argv[]) {
-
     node_id = stoi(argv[1]);
-
     ensure_walsnap_open();
     remove_temp_snap();
     int idx_dur_snap = load_snap();
@@ -61,18 +59,15 @@ int main(int argc, char* argv[]) {
     replay_wal(idx_dur_snap);
 
     thread([]() {
-        take_pictures();
+        take_pics();
     }).detach();
 
     int server_fd = make_listener();
-
     while (true) {
-
         int client_fd = accept(server_fd, nullptr, nullptr);
 
         thread([client_fd]() {
             dispatch(client_fd);
         }).detach();
-
     }
 }

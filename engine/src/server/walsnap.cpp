@@ -1,5 +1,3 @@
-#include "../headers/walsnap.h"
-#include "../headers/wr.h"
 #include "../headers/globals.h"
 #include <fstream>
 #include <mutex>
@@ -45,6 +43,7 @@ void apply_wr(const wr& w) {
     {
         unique_lock lock(db_mutex);
         db[w.k] = w.v;
+        ++log_index;
     }
 
     {
@@ -93,11 +92,25 @@ void truncate_wal(int idx_during_snap) {
     rename((WAL_PATH + string(".tmp")).c_str(), WAL_PATH.c_str());
     wal.close(); wal.open(WAL_PATH, ios::app);
 }
-void take_pictures() {
-    int idx_during_prev_snap = 0;
+
+/*
+A snapshot captures the DB state at a log index called the snap index
+Holding the DB lock while dumping the DB into a snapshot prevents capturing a partial state
+log index increments within the db lock.
+Meaning, the log index can't advance during the dump.
+Therefore, snapshot is taken when we grab the DB lock
+
+key is dirty if it was updated after snapshot
+if we take the snapshot after another thread updates the DB but before
+the thread can mark a key dirty, then a fresh key is incorrectly marked dirty.
+This results in unnecessarily replaying an entry when constructing the next snap
+This is not a correctness issue, with negligible performance impact
+The fix is a bit complex, so I will just document this as a tradeoff
+*/
+void take_pics() {
+    int prev_snap_idx = 0;
     while (true) {
-        int idx_during_snap = log_index.load(); // take pic
-        if (idx_during_snap - idx_during_prev_snap < 100) continue;
+        if (log_index.load() - prev_snap_idx < 100) continue;
 
         str_arr_1D empty;
         {
@@ -107,8 +120,10 @@ void take_pictures() {
         str_arr_1D dk = empty;
 
         str_arr_2D wip_snap_arr = prev_snap_arr;
+        int snap_idx;
         {
             shared_lock lock(db_mutex);
+            snap_idx = log_index.load();
             for (auto& k : dk)
                 wip_snap_arr[k] = db.contains(k) ? db.at(k) : "";
         }
@@ -116,14 +131,14 @@ void take_pictures() {
 
         // snap.tmp --> snap.txt
         ofstream f(SNAP_DIR_PATH + "snap" + ".tmp");
-        f << idx_during_snap << "\n";
+        f << snap_idx << "\n";
         for (auto& [k, v] : new_snap_arr) f << k << " " << v << "\n";
         f.flush(); f.close();
         rename((SNAP_DIR_PATH + "snap" + ".tmp").c_str(), (SNAP_DIR_PATH + "snap").c_str());
 
-        truncate_wal(idx_during_snap);
-        prev_snap_arr = std::move(new_snap_arr); // for diff
-        idx_during_prev_snap = idx_during_snap;
+        truncate_wal(snap_idx);
+        prev_snap_arr = std::move(new_snap_arr);
+        prev_snap_idx = snap_idx;
         sleep_for(seconds(1));
     }
 }
