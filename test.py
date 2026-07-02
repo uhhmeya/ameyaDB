@@ -5,12 +5,18 @@ import struct
 import subprocess
 import time
 
-# cwd = /ameyaDB
-SERVER_DIR = "engine/src/server"
-CLIENT_DIR = "engine/src"
-SNAP_DIR   = "engine/src/output/snaps"
-WAL_PATH   = "engine/src/output/wal.txt"
-OUTPUT_DIR = "engine/src/output"
+# ./ameyaDB
+ROOT = os.path.dirname(os.path.abspath(__file__))
+
+SERVER_DIR = os.path.join(ROOT, "engine/src/server")
+CLIENT_DIR = os.path.join(ROOT, "engine/src")
+OUTPUT_DIR = os.path.join(ROOT, "engine/src/output")
+SNAP_DIR   = os.path.join(OUTPUT_DIR, "snaps")
+WAL_PATH   = os.path.join(OUTPUT_DIR, "wal.txt")
+EXEC_DIR   = os.path.join(OUTPUT_DIR, "EXEC")
+SERVER_EXEC_PATH = os.path.join(EXEC_DIR, "server")
+CLIENT_EXEC_PATH = os.path.join(EXEC_DIR, "client")
+
 
 SERVER_PORT = 8080
 spam_time_sec = 5
@@ -18,7 +24,10 @@ READ_OP = 2
 passed = True
 
 def start_server(timeout=10):
-    p = subprocess.Popen(["../EXEC/server", "0"], cwd=SERVER_DIR)
+
+    # path vars in server code are relative to src/server
+    p = subprocess.Popen([SERVER_EXEC_PATH, "0"], cwd=SERVER_DIR)
+
     for _ in range(timeout * 10):
         if p.poll() is not None:
             raise RuntimeError(f"[server] exited early with code {p.returncode}")
@@ -28,6 +37,7 @@ def start_server(timeout=10):
             return p
         except OSError:
             time.sleep(0.1)
+
     raise RuntimeError("[server] never came up")
 
 def send_read(k):
@@ -44,6 +54,11 @@ def send_read(k):
 def main():
     print("\n\n")
     global passed
+
+    # remove stale execs
+    for exe in (SERVER_EXEC_PATH, CLIENT_EXEC_PATH):
+        if os.path.exists(exe):
+            os.remove(exe)
 
     # remove stale server
     stale_server = subprocess.run(["lsof", "-t", f"-i:{SERVER_PORT}"], capture_output=True, text=True)
@@ -63,26 +78,22 @@ def main():
 
     # compiles server
     subprocess.run(
-        ["g++", "-std=c++20", "-o",
-         os.path.abspath(OUTPUT_DIR) + "/EXEC/server",
-         "main.cpp", "handlers.cpp", "walsnap.cpp"],
+        ["g++", "-std=c++20", "-o", SERVER_EXEC_PATH, "main.cpp", "handlers.cpp", "walsnap.cpp"],
         cwd=SERVER_DIR, check=True
     )
 
     # compiles client
     subprocess.run(
-        ["g++", "-std=c++20", "-o",
-         os.path.abspath(OUTPUT_DIR) + "/EXEC/client",
-         "clients.cpp"],
+        ["g++", "-std=c++20", "-o", CLIENT_EXEC_PATH, "clients.cpp"],
         cwd=CLIENT_DIR, check=True
     )
 
-    # make server process
+    # make server process ; path vars are relative to src/server
     server = start_server()
     print(f"[test] server {server.pid} started")
 
-    # make client process
-    client = subprocess.Popen(["./EXEC/client"], cwd=CLIENT_DIR)
+    # make client process ; there are no path vars in clients.cpp
+    client = subprocess.Popen([CLIENT_EXEC_PATH])
     print(f"[test] client {client.pid} started")
 
     # let client spam writes to server for 5s
@@ -94,12 +105,12 @@ def main():
 
     exp = {}
 
+    # capture db state
     with open(os.path.join(SNAP_DIR, "snap")) as snap:
         idx_dur_snap = int(snap.readline().strip())
         for entry in snap:
             k, v = entry.strip().split()
             exp[k] = v
-
     with open(WAL_PATH) as wal:
         for entry in wal:
             parts = entry.strip().split()
@@ -108,6 +119,7 @@ def main():
             if log_idx > idx_dur_snap:
                 exp[k] = v
 
+    # terminate server & client
     server.send_signal(signal.SIGKILL)
     server.wait()
     print(f"[test] server {server.pid} terminated")
@@ -115,9 +127,11 @@ def main():
     client.wait()
     print(f"[test] client {client.pid} terminated")
 
+    # reboot server
     reboot = start_server()
     print(f"[test] server {reboot.pid} started")
 
+    # verify wal recovery
     with open(WAL_PATH) as WAL:
         for entry in WAL:
             parts = entry.strip().split()
@@ -127,15 +141,15 @@ def main():
                 print(f"[test] ERROR wal entry({wal_entry_idx}) below snap index({idx_dur_snap})")
                 passed = False
 
+    # verify db state recovery
     bad = 0
     for k, exp_v in exp.items():
         actual_v = send_read(k)
         if actual_v != exp_v:
             bad += 1
             passed = False
-    print(f"[test] {bad}/{len(exp)} keys had wrong value")
 
-
+    # terminate server
     reboot.send_signal(signal.SIGKILL)
     reboot.wait()
     print(f"[test] server {reboot.pid} terminated")

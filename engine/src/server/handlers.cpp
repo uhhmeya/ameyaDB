@@ -4,6 +4,7 @@
 void apply_wr(const wr& w);
 string apply_r(const string& k);
 
+// helpers
 static bool read_tcp(int client_fd, void* buf, size_t n) {
     size_t received = 0;
     while (received < n) {
@@ -56,6 +57,7 @@ void handle_write(int client_fd) {
     uint8_t ack = 1;
     write(client_fd, &ack, 1);
 }
+
 void handle_read(int client_fd) {
     auto k = read_k(client_fd);
     if (!k) {
