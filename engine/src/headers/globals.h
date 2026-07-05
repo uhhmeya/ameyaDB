@@ -7,22 +7,32 @@
 #include <chrono>
 #include <unordered_set>
 
-struct wr {
-    std::string k;
-    std::string v;
-    uint8_t  forwarding_node{0};
-    uint8_t  leader_node{0};
-    uint64_t time_leader_received{0};
-    uint32_t log_index{0};
-    uint32_t term{0};
-    uint32_t checksum{0};
-};
-
 // namespaces
 using namespace std;
 using namespace std::chrono;
 using namespace this_thread;
 using namespace filesystem;
+
+
+struct write_cmd {
+    string k;
+    string v;
+};
+
+struct raft_stats {
+    uint8_t  forwarding_node{0};
+    uint8_t  leader_node{0};
+    uint64_t time_leader_received{0};
+};
+
+struct entry {
+    write_cmd wr;
+    raft_stats stats;
+
+    uint32_t log_index{0};
+    uint32_t term{0};
+    uint32_t checksum{0};
+};
 
 // types
 using str_arr_1D = unordered_set<string>;
@@ -35,11 +45,7 @@ enum Op {
     REQUEST_VOTE   = 3,
     APPEND_ENTRIES = 4,
 };
-enum Raft_Role {
-    FOLLOWER,
-    CANDIDATE,
-    LEADER
-};
+
 
 // variables
 extern int node_id;
@@ -51,13 +57,15 @@ inline uint64_t now_ms() {
         system_clock::now().time_since_epoch()
     ).count();
 }
-inline uint32_t compute_checksum(const wr& w) {
+inline uint32_t compute_checksum(const entry& e) {
     uint32_t crc = 0xFFFFFFFF;
-    string data = to_string(w.time_leader_received)   +
-                  to_string(w.forwarding_node) +
-                  to_string(w.log_index)   +
-                  w.k               +
-                  w.v;
+    string data = e.wr.k                                    +
+                  e.wr.v                                    +
+                  to_string(e.stats.forwarding_node)        +
+                  to_string(e.stats.leader_node)            +
+                  to_string(e.stats.time_leader_received)   +
+                  to_string(e.log_index)                    +
+                  to_string(e.term);
     for (char c : data) {
         crc ^= static_cast<uint8_t>(c);
         for (int j = 0; j < 8; j++)
@@ -67,9 +75,7 @@ inline uint32_t compute_checksum(const wr& w) {
 }
 
 // shared
-void truncate_wal(int idx_during_snap); // handlers + walsnap
-
-// replay : walsnap
+void truncate_wal(int idx_during_snap);
 
 
 // AWS ---------------------------------------------------

@@ -1,7 +1,7 @@
 #include <thread>
 #include <unistd.h>
 #include "../headers/globals.h"
-void apply_wr(const wr& w);
+void apply_entry(const entry& e);
 string apply_r(const string& k);
 
 // helpers
@@ -45,14 +45,17 @@ void handle_write(int client_fd) {
     }
     auto [k, v] = *kv;
 
-    wr w;
-    w.k = k; w.v = v;
-    w.forwarding_node = node_id;
-    w.log_index = log_index;
-    w.time_leader_received = now_ms();
-    w.checksum = compute_checksum(w);
+    entry e;
+    e.wr.k = k;
+    e.wr.v = v;
 
-    apply_wr(w);
+    e.stats.forwarding_node = node_id;
+    e.stats.time_leader_received = now_ms();
+
+    e.log_index = log_index;
+    e.checksum = compute_checksum(e);
+
+    apply_entry(e);
 
     uint8_t ack = 1;
     write(client_fd, &ack, 1);

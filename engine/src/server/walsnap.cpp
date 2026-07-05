@@ -21,34 +21,36 @@ static str_arr_1D dk;
 static mutex dk_mutex;
 
 
-static string serialize_wr(const wr& w) {
-    return w.k                              + " " +
-           w.v                              + " " +
-           to_string(w.log_index)           + " " +
-           to_string(w.checksum)            + " " +
-           to_string(w.forwarding_node)     + " " +
-           to_string(w.time_leader_received) + "\n";
+static string serialize_entry(const entry& e) {
+    return e.wr.k                                + " " +
+           e.wr.v                                + " " +
+           to_string(e.stats.forwarding_node)     + " " +
+           to_string(e.stats.leader_node)         + " " +
+           to_string(e.stats.time_leader_received) + " " +
+           to_string(e.log_index)                 + " " +
+           to_string(e.term)                      + " " +
+           to_string(e.checksum)                  + "\n";
 }
 
 // commit
-void apply_wr(const wr& w) {
-    string str_wr = serialize_wr(w);
+void apply_entry(const entry& e) {
+    string str_entry = serialize_entry(e);
 
     {
         lock_guard lock(wal_mutex);
-        wal << str_wr;
+        wal << str_entry;
         wal.flush();
     }
 
     {
         unique_lock lock(db_mutex);
-        db[w.k] = w.v;
+        db[e.wr.k] = e.wr.v;
         ++log_index;
     }
 
     {
         lock_guard lock(dk_mutex);
-        dk.insert(w.k);
+        dk.insert(e.wr.k);
     }
 
 }
@@ -79,8 +81,10 @@ void truncate_wal(int idx_during_snap) {
     while (getline(old_wal, line)) {
         if (line.empty()) continue;
         istringstream ss(line);
-        string k, v; uint32_t idx, cs, fn; uint64_t t;
-        ss >> k >> v >> idx >> cs >> fn >> t;
+        string k, v;
+        uint32_t fn, ln, idx, term, cs;
+        uint64_t tlr;
+        ss >> k >> v >> fn >> ln >> tlr >> idx >> term >> cs;
 
         if (ss.fail()) continue;
 
@@ -181,26 +185,29 @@ void replay_wal(int idx_dur_snap) {
 
         istringstream ss(line);
         uint64_t time_leader_received;
-        uint32_t forwarding_node, idx_of_wr, checksum;
+        uint32_t forwarding_node, leader_node, idx_of_wr, term, checksum;
         string k, v;
-        ss >> k >> v >> idx_of_wr >> checksum >> forwarding_node >> time_leader_received;
+        ss >> k >> v >> forwarding_node >> leader_node >> time_leader_received >> idx_of_wr >> term >> checksum;
 
         if (ss.fail()) continue; // partial
         if (idx_of_wr < idx_dur_snap) continue; // covered by snap
 
-        wr w;
-        w.k = k;
-        w.v = v;
-        w.time_leader_received = time_leader_received;
-        w.forwarding_node = static_cast<uint8_t>(forwarding_node);
-        w.log_index = idx_of_wr;
-        w.checksum = compute_checksum(w);
+        entry e;
+        e.wr.k = k;
+        e.wr.v = v;
+        e.stats.forwarding_node = static_cast<uint8_t>(forwarding_node);
+        e.stats.leader_node = static_cast<uint8_t>(leader_node);
+        e.stats.time_leader_received = time_leader_received;
+        e.log_index = idx_of_wr;
+        e.term = term;
+        e.checksum = compute_checksum(e);
 
         // partial
-        if (w.checksum != checksum) continue;
+        if (e.checksum != checksum) continue;
 
-        db[w.k] = w.v;
-        prev_snap_arr[w.k] = w.v;
+        // prev_snap = db on boot
+        db[e.wr.k] = e.wr.v;
+        prev_snap_arr[e.wr.k] = e.wr.v;
 
         idx_of_last_wr_in_wal = idx_of_wr;
     }

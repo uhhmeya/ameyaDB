@@ -114,8 +114,8 @@ def main():
     with open(WAL_PATH) as wal:
         for entry in wal:
             parts = entry.strip().split()
-            if len(parts) < 3: continue
-            k, v, log_idx = parts[0], parts[1], int(parts[2])
+            if len(parts) < 8: continue
+            k, v, log_idx = parts[0], parts[1], int(parts[5])
             if log_idx > idx_dur_snap:
                 exp[k] = v
 
@@ -135,8 +135,8 @@ def main():
     with open(WAL_PATH) as WAL:
         for entry in WAL:
             parts = entry.strip().split()
-            if len(parts) < 3: continue # partial
-            wal_entry_idx = int(parts[2])
+            if len(parts) < 8: continue # partial
+            wal_entry_idx = int(parts[5])
             if wal_entry_idx < idx_dur_snap:
                 print(f"[test] ERROR wal entry({wal_entry_idx}) below snap index({idx_dur_snap})")
                 passed = False
