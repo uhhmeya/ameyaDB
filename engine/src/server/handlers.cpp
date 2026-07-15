@@ -1,7 +1,7 @@
 #include <thread>
 #include <unistd.h>
 #include "../headers/globals.h"
-void apply_entry(const entry& e);
+void apply_entry(const string& k, const string& v);
 string apply_r(const string& k);
 
 // helpers
@@ -37,6 +37,7 @@ static optional<string> read_k(int client_fd) {
     return k;
 }
 
+// (k v) (fn ln tlr) (i t CRC)
 void handle_write(int client_fd) {
     auto kv = read_kv(client_fd);
     if (!kv) {
@@ -45,17 +46,7 @@ void handle_write(int client_fd) {
     }
     auto [k, v] = *kv;
 
-    entry e;
-    e.wr.k = k;
-    e.wr.v = v;
-
-    e.stats.forwarding_node = node_id;
-    e.stats.time_leader_received = now_ms();
-
-    e.log_index = log_index;
-    e.checksum = compute_checksum(e);
-
-    apply_entry(e);
+    apply_entry(k, v);
 
     uint8_t ack = 1;
     write(client_fd, &ack, 1);

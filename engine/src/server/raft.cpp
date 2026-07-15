@@ -10,52 +10,49 @@ enum Raft_Role {
     CANDIDATE,
     LEADER
 };
-enum Raft_ID {
-    NOBODY = -1,
-    node_0 = 0,
-    node_1 = 1,
-    node_2 = 2,
-};
 
-static const string RAFT_STATE_PATH = "../output/raft_state.txt";
+static const string RAFT_PATH = "../output/raft.txt";
 
-static uint32_t term;
-static Raft_ID vote;
-static Raft_ID currentLeader;
-static Raft_Role currentRole;
+static uint32_t curTerm;
+static int vote;
+static int leader;
+static Raft_Role role;
 static uint32_t commit_idx;
-static unordered_set<int> votesReceived;
-static vector<uint32_t> sentLength;
-static vector<uint32_t> ackedLength;
+static unordered_set<int> in_votes;
+static vector<uint32_t> sent_len;
+static vector<uint32_t> ack_len;
 
 void raft_init() {
+    ifstream f(RAFT_PATH);
 
-    // open raft
-    ifstream f(RAFT_STATE_PATH);
-
-    // recover state
+    // recover
     if (f.is_open()) {
-        int raw_vote;
-        f >> term >> raw_vote;
-        vote = static_cast<Raft_ID>(raw_vote);
-        cerr << "[raft_init] restored raft state" << endl;
-
+        f >> curTerm >> vote;
+        cerr << "[raft_init] recovered raft state" << endl;
     }
 
-    // first boot
+    // boot
     else {
-        term = 0;
-        vote = NOBODY;
-        cerr << "[raft_init] No prev raft state found in " << RAFT_STATE_PATH << endl;
+        curTerm = 0;
+        vote = -1;
+        cerr << "[raft_init] No prev raft state found in " << RAFT_PATH << endl;
     }
 
-    // init
-    commit_idx = 0;
-    currentRole = FOLLOWER;
-    currentLeader = NOBODY;
+    role = FOLLOWER;
+    leader = -1;
+    in_votes.clear();
 
-    // followers shouldn't have this
-    votesReceived.clear();
-    sentLength.assign(size(PEER_ADDRS), 0);
-    ackedLength.assign(size(PEER_ADDRS), 0);
+    // leader only
+    sent_len.assign(size(PEER_ADDRS), 0);
+    ack_len.assign(size(PEER_ADDRS), 0);
+    commit_idx = 0;
+}
+
+void start_election() {
+    curTerm += 1;
+    role = CANDIDATE;
+    vote = node_id;
+    in_votes = {node_id};
+
+    uint32_t term_of_last_wal_entry = 0;
 }

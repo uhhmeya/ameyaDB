@@ -33,23 +33,39 @@ static string serialize_entry(const entry& e) {
 }
 
 // commit
-void apply_entry(const entry& e) {
-    string str_entry = serialize_entry(e);
+void apply_entry(const string& k, const string& v) {
 
-    {
-        lock_guard lock(wal_mutex);
-        wal << str_entry;
-        wal.flush();
-    }
+    entry e;
+    e.wr.k = k;
+    e.wr.v = v;
+    e.stats.forwarding_node = node_id;
+    e.stats.time_leader_received = now_ms();
 
+    // wait for lock
     {
-        unique_lock lock(db_mutex);
+        unique_lock x(db_mutex);
+
+        // set order
+        e.log_index = log_index.fetch_add(1);
+        e.checksum  = compute_checksum(e);
+
+        string str_entry = serialize_entry(e);
+
+        // flush to wal in same order
+        {
+
+            // guards from truncate_wal
+            lock_guard y(wal_mutex);
+
+            wal << str_entry;
+            wal.flush();
+        }
+
         db[e.wr.k] = e.wr.v;
-        ++log_index;
     }
 
     {
-        lock_guard lock(dk_mutex);
+        lock_guard z(dk_mutex);
         dk.insert(e.wr.k);
     }
 
@@ -82,8 +98,7 @@ void truncate_wal(int idx_during_snap) {
         if (line.empty()) continue;
         istringstream ss(line);
         string k, v;
-        uint32_t fn, ln, idx, term, cs;
-        uint64_t tlr;
+        int fn, ln, tlr, idx, term, cs;
         ss >> k >> v >> fn >> ln >> tlr >> idx >> term >> cs;
 
         if (ss.fail()) continue;
@@ -143,7 +158,7 @@ void take_pics() {
         truncate_wal(snap_idx);
         prev_snap_arr = std::move(new_snap_arr);
         prev_snap_idx = snap_idx;
-        sleep_for(seconds(1));
+        sleep_for(seconds(3));
     }
 }
 int load_snap() {
@@ -184,32 +199,31 @@ void replay_wal(int idx_dur_snap) {
         if (line.empty()) continue;
 
         istringstream ss(line);
-        uint64_t time_leader_received;
-        uint32_t forwarding_node, leader_node, idx_of_wr, term, checksum;
         string k, v;
-        ss >> k >> v >> forwarding_node >> leader_node >> time_leader_received >> idx_of_wr >> term >> checksum;
+        int fn, ln, tlr, idx, term, cs;
+        ss >> k >> v >> fn >> ln >> tlr >> idx >> term >> cs;
 
         if (ss.fail()) continue; // partial
-        if (idx_of_wr < idx_dur_snap) continue; // covered by snap
+        if (idx < idx_dur_snap) continue; // covered by snap
 
         entry e;
         e.wr.k = k;
         e.wr.v = v;
-        e.stats.forwarding_node = static_cast<uint8_t>(forwarding_node);
-        e.stats.leader_node = static_cast<uint8_t>(leader_node);
-        e.stats.time_leader_received = time_leader_received;
-        e.log_index = idx_of_wr;
+        e.stats.forwarding_node = fn;
+        e.stats.leader_node = ln;
+        e.stats.time_leader_received = tlr;
+        e.log_index = idx;
         e.term = term;
         e.checksum = compute_checksum(e);
 
         // partial
-        if (e.checksum != checksum) continue;
+        if (e.checksum != cs) continue;
 
         // prev_snap = db on boot
         db[e.wr.k] = e.wr.v;
         prev_snap_arr[e.wr.k] = e.wr.v;
 
-        idx_of_last_wr_in_wal = idx_of_wr;
+        idx_of_last_wr_in_wal = idx;
     }
     log_index.store(idx_of_last_wr_in_wal);
 }

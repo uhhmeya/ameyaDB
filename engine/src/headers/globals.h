@@ -20,9 +20,9 @@ struct write_cmd {
 };
 
 struct raft_stats {
-    uint8_t  forwarding_node{0};
-    uint8_t  leader_node{0};
-    uint64_t time_leader_received{0};
+    int  forwarding_node{0};
+    int  leader_node{0};
+    int time_leader_received{0};
 };
 
 struct entry {

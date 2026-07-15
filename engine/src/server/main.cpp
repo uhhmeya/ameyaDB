@@ -50,6 +50,7 @@ void dispatch(int client_fd) {
     close(client_fd);
 }
 
+// (k v) (fn ln tlr) (i t CRC)
 int main(int argc, char* argv[]) {
     node_id = stoi(argv[1]);
     ensure_walsnap_open();
