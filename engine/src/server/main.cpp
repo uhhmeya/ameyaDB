@@ -56,6 +56,7 @@ int main(int argc, char* argv[]) {
     ensure_walsnap_open();
     remove_temp_snap();
     int idx_dur_snap = load_snap();
+    cerr << "[main] loaded snap_idx from previous boot = "<< idx_dur_snap << endl;
     truncate_wal(idx_dur_snap);
     replay_wal(idx_dur_snap);
 

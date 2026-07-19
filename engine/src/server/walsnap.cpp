@@ -8,6 +8,7 @@
 #include <iostream>
 #include <sstream>
 #include <cstdio>
+#include <random>
 
 static const string SNAP_DIR_PATH = "../output/snaps/";
 static const string WAL_PATH      = "../output/wal.txt";
@@ -18,7 +19,6 @@ static ofstream wal;
 static mutex wal_mutex;
 static str_arr_2D prev_snap_arr;
 static str_arr_1D dk;
-static mutex dk_mutex;
 
 
 static string serialize_entry(const entry& e) {
@@ -31,6 +31,11 @@ static string serialize_entry(const entry& e) {
            to_string(e.term)                      + " " +
            to_string(e.checksum)                  + "\n";
 }
+int rand_sleep_timer_ms(int lo, int hi) {
+    static thread_local std::mt19937 rng(std::random_device{}());
+    std::uniform_int_distribution<int> dist(lo, hi);
+    return dist(rng);
+}
 
 // commit
 void apply_entry(const string& k, const string& v) {
@@ -41,20 +46,16 @@ void apply_entry(const string& k, const string& v) {
     e.stats.forwarding_node = node_id;
     e.stats.time_leader_received = now_ms();
 
-    // wait for lock
     {
         unique_lock x(db_mutex);
 
-        // set order
-        e.log_index = log_index.fetch_add(1);
+        e.log_index = ++log_index;
         e.checksum  = compute_checksum(e);
 
         string str_entry = serialize_entry(e);
 
-        // flush to wal in same order
+        // guards from truncate_wal
         {
-
-            // guards from truncate_wal
             lock_guard y(wal_mutex);
 
             wal << str_entry;
@@ -62,13 +63,8 @@ void apply_entry(const string& k, const string& v) {
         }
 
         db[e.wr.k] = e.wr.v;
-    }
-
-    {
-        lock_guard z(dk_mutex);
         dk.insert(e.wr.k);
     }
-
 }
 string apply_r(const string& k) {
     shared_lock lock(db_mutex);
@@ -88,7 +84,7 @@ void remove_temp_snap() {
         if (entry.path().extension() == ".tmp") remove(entry.path());
     if (exists(WAL_PATH + ".tmp")) remove(WAL_PATH + ".tmp");
 }
-void truncate_wal(int idx_during_snap) {
+void truncate_wal(int snap_idx) {
     lock_guard lock(wal_mutex);
     ifstream old_wal(WAL_PATH);
     ofstream new_wal(WAL_PATH + string(".tmp"));
@@ -97,13 +93,16 @@ void truncate_wal(int idx_during_snap) {
     while (getline(old_wal, line)) {
         if (line.empty()) continue;
         istringstream ss(line);
+
         string k, v;
-        int fn, ln, tlr, idx, term, cs;
+        int fn, ln;
+        long long tlr;
+        uint32_t idx, term, cs;
         ss >> k >> v >> fn >> ln >> tlr >> idx >> term >> cs;
 
         if (ss.fail()) continue;
 
-        if (idx >= idx_during_snap)
+        if (idx > snap_idx)
             new_wal << line << "\n";
     }
     new_wal.flush(); new_wal.close(); old_wal.close();
@@ -112,38 +111,27 @@ void truncate_wal(int idx_during_snap) {
     wal.close(); wal.open(WAL_PATH, ios::app);
 }
 
-/*
-A snapshot captures the DB state at a log index called the snap index
-Holding the DB lock while dumping the DB into a snapshot prevents capturing a partial state
-log index increments within the db lock.
-Meaning, the log index can't advance during the dump.
-Therefore, snapshot is taken when we grab the DB lock
 
-key is dirty if it was updated after snapshot
-if we take the snapshot after another thread updates the DB but before
-the thread can mark a key dirty, then a fresh key is incorrectly marked dirty.
-This results in unnecessarily replaying an entry when constructing the next snap
-This is not a correctness issue, with negligible performance impact
-The fix is a bit complex, so I will just document this as a tradeoff
-*/
 void take_pics() {
     int prev_snap_idx = 0;
+
     while (true) {
-        if (log_index.load() - prev_snap_idx < 100) continue;
+
+        // prevents constant checking when clients are not sending writes
+        if (log_index.load() - prev_snap_idx < 100) {
+            sleep_for(milliseconds(rand_sleep_timer_ms(100,700)));
+            continue;
+        }
 
         str_arr_1D empty;
-        {
-            lock_guard lock(dk_mutex);
-            swap(empty, dk);
-        }
-        str_arr_1D dk = empty;
-
         str_arr_2D wip_snap_arr = prev_snap_arr;
         int snap_idx;
         {
             shared_lock lock(db_mutex);
+            swap(empty, dk);
+            str_arr_1D local_dk = empty;
             snap_idx = log_index.load();
-            for (auto& k : dk)
+            for (auto& k : local_dk)
                 wip_snap_arr[k] = db.contains(k) ? db.at(k) : "";
         }
         str_arr_2D new_snap_arr = wip_snap_arr;
@@ -158,9 +146,13 @@ void take_pics() {
         truncate_wal(snap_idx);
         prev_snap_arr = std::move(new_snap_arr);
         prev_snap_idx = snap_idx;
-        sleep_for(seconds(3));
+
+        // prevent instant snapping
+        sleep_for(milliseconds(rand_sleep_timer_ms(1200, 1800)));
+
     }
 }
+
 int load_snap() {
     ifstream f(SNAP_DIR_PATH + "snap");
 
@@ -184,27 +176,29 @@ int load_snap() {
 
     return snap_idx;
 }
-void replay_wal(int idx_dur_snap) {
+void replay_wal(int snap_idx) {
 
     ifstream f(WAL_PATH);
 
     if (!f.is_open())
         throw runtime_error("[replay_wal] could not open WAL content\n");
 
-    // handles case where idx_during_latest_snap is last write in WAL
-    int idx_of_last_wr_in_wal = idx_dur_snap;
+    int highest_committed_idx = snap_idx;
 
     string line;
     while (getline(f, line)) {
         if (line.empty()) continue;
 
         istringstream ss(line);
+
         string k, v;
-        int fn, ln, tlr, idx, term, cs;
+        int fn, ln;
+        long long tlr;
+        uint32_t idx, term, cs;
         ss >> k >> v >> fn >> ln >> tlr >> idx >> term >> cs;
 
         if (ss.fail()) continue; // partial
-        if (idx < idx_dur_snap) continue; // covered by snap
+        if (idx <= snap_idx) continue; // covered by snap
 
         entry e;
         e.wr.k = k;
@@ -223,7 +217,7 @@ void replay_wal(int idx_dur_snap) {
         db[e.wr.k] = e.wr.v;
         prev_snap_arr[e.wr.k] = e.wr.v;
 
-        idx_of_last_wr_in_wal = idx;
+        highest_committed_idx = idx;
     }
-    log_index.store(idx_of_last_wr_in_wal);
+    log_index.store(highest_committed_idx);
 }

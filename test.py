@@ -107,7 +107,7 @@ def main():
 
     # capture db state
     with open(os.path.join(SNAP_DIR, "snap")) as snap:
-        idx_dur_snap = int(snap.readline().strip())
+        snap_idx_before_freeze = int(snap.readline().strip())
         for entry in snap:
             k, v = entry.strip().split()
             exp[k] = v
@@ -116,7 +116,7 @@ def main():
             parts = entry.strip().split()
             if len(parts) < 8: continue
             k, v, log_idx = parts[0], parts[1], int(parts[5])
-            if log_idx > idx_dur_snap:
+            if log_idx > snap_idx_before_freeze:
                 exp[k] = v
 
     # terminate server & client
@@ -129,6 +129,8 @@ def main():
 
     # reboot server
     reboot = start_server()
+
+
     print(f"[test] server {reboot.pid} started")
 
     # verify wal recovery
@@ -137,8 +139,8 @@ def main():
             parts = entry.strip().split()
             if len(parts) < 8: continue # partial
             wal_entry_idx = int(parts[5])
-            if wal_entry_idx < idx_dur_snap:
-                print(f"[test] ERROR wal entry({wal_entry_idx}) below snap index({idx_dur_snap})")
+            if wal_entry_idx < snap_idx_before_freeze:
+                print(f"[test] ERROR wal entry({wal_entry_idx}) below snap index({snap_idx_before_freeze})")
                 passed = False
 
     # verify db state recovery
