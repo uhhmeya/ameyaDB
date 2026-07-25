@@ -47,9 +47,12 @@ enum Op {
 };
 
 
-// variables
-extern int node_id;
-extern std::atomic<uint32_t> log_index; // odr
+/*
+we don't know these values until main(). so we assign them in main
+and then make them global via "extern"
+*/
+extern int my_node_id;
+extern std::atomic<uint32_t> log_index;
 
 // utils
 inline uint64_t now_ms() {
@@ -75,10 +78,21 @@ inline uint32_t compute_checksum(const entry& e) {
 }
 
 // shared
-void truncate_wal(int idx_during_snap);
+void truncate_wal(uint32_t idx_during_snap);
 
 
-// AWS ---------------------------------------------------
+// AWS
 inline const std::string SNS_TOPIC_ARN ="arn:aws:sns:us-east-1:540799520398:ameyaDB-replication";
 inline const char* PEER_ADDRS[3] = {"node-0.ameyadb.internal","node-1.ameyadb.internal","node-2.ameyadb.internal",};
 inline const std::string QUEUE_URLS[3] = {"https://sqs.us-east-1.amazonaws.com/540799520398/ameyaDB-replication-node-0","https://sqs.us-east-1.amazonaws.com/540799520398/ameyaDB-replication-node-1","https://sqs.us-east-1.amazonaws.com/540799520398/ameyaDB-replication-node-2"};
+
+// Local
+struct addr_t {
+    const char* ip;
+    int port;
+};
+inline const addr_t LOCAL_ADDRS[3] = {
+    {"127.0.0.1", 8080},
+    {"127.0.0.1", 8081},
+    {"127.0.0.1", 8082},
+};

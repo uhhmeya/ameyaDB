@@ -16,9 +16,11 @@ static const string WAL_PATH      = "../output/wal.txt";
 static unordered_map<string, string> db;
 static shared_mutex db_mutex;
 static ofstream wal;
-static mutex wal_mutex;
+static mutex log_mutex;
 static str_arr_2D prev_snap_arr;
 static str_arr_1D dk;
+static vector<entry> log_vector;
+static uint32_t log_base = 0;
 
 
 static string serialize_entry(const entry& e) {
@@ -43,7 +45,7 @@ void apply_entry(const string& k, const string& v) {
     entry e;
     e.wr.k = k;
     e.wr.v = v;
-    e.stats.forwarding_node = node_id;
+    e.stats.forwarding_node = my_node_id;
     e.stats.time_leader_received = now_ms();
 
     {
@@ -56,10 +58,11 @@ void apply_entry(const string& k, const string& v) {
 
         // guards from truncate_wal
         {
-            lock_guard y(wal_mutex);
+            lock_guard y(log_mutex);
 
             wal << str_entry;
             wal.flush();
+            log_vector.push_back(e);
         }
 
         db[e.wr.k] = e.wr.v;
@@ -73,7 +76,7 @@ string apply_r(const string& k) {
 }
 
 // wal snap stuff
-void ensure_walsnap_open() {
+void ensure_wal_is_open() {
     create_directories(SNAP_DIR_PATH);
     wal.open(WAL_PATH, ios::app);
     if (!wal.is_open())
@@ -84,8 +87,8 @@ void remove_temp_snap() {
         if (entry.path().extension() == ".tmp") remove(entry.path());
     if (exists(WAL_PATH + ".tmp")) remove(WAL_PATH + ".tmp");
 }
-void truncate_wal(int snap_idx) {
-    lock_guard lock(wal_mutex);
+void truncate_wal(uint32_t snap_idx) {
+    lock_guard lock(log_mutex);
     ifstream old_wal(WAL_PATH);
     ofstream new_wal(WAL_PATH + string(".tmp"));
 
@@ -109,11 +112,16 @@ void truncate_wal(int snap_idx) {
 
     rename((WAL_PATH + string(".tmp")).c_str(), WAL_PATH.c_str());
     wal.close(); wal.open(WAL_PATH, ios::app);
+
+    // truncate log vector
+    auto cut = ranges::find_if(log_vector, [&](const entry& e){ return e.log_index > snap_idx; });
+    log_vector.erase(log_vector.begin(), cut);
+    log_base = snap_idx;
 }
 
 
 void take_pics() {
-    int prev_snap_idx = 0;
+    uint32_t prev_snap_idx = 0;
 
     while (true) {
 
@@ -125,7 +133,7 @@ void take_pics() {
 
         str_arr_1D empty;
         str_arr_2D wip_snap_arr = prev_snap_arr;
-        int snap_idx;
+        uint32_t snap_idx;
         {
             shared_lock lock(db_mutex);
             swap(empty, dk);
@@ -153,17 +161,14 @@ void take_pics() {
     }
 }
 
-int load_snap() {
+uint32_t load_snap() {
     ifstream f(SNAP_DIR_PATH + "snap");
 
-    if (!f.is_open()) {
-        cerr << "[load_snap] No prev snap found — expected only on fresh deploy\n";
-        return 0;
-    }
+    if (!f.is_open()) return 0;
 
     string line;
     getline(f, line);
-    int snap_idx = stoi(line);
+    uint32_t snap_idx = stoul(line);
 
     while (getline(f, line)) {
         auto sp = line.find(' ');
@@ -176,14 +181,15 @@ int load_snap() {
 
     return snap_idx;
 }
-void replay_wal(int snap_idx) {
+void replay_wal(uint32_t snap_idx) {
 
     ifstream f(WAL_PATH);
 
     if (!f.is_open())
         throw runtime_error("[replay_wal] could not open WAL content\n");
 
-    int highest_committed_idx = snap_idx;
+    log_base = snap_idx;
+    uint32_t highest_committed_idx = snap_idx;
 
     string line;
     while (getline(f, line)) {
@@ -216,8 +222,16 @@ void replay_wal(int snap_idx) {
         // prev_snap = db on boot
         db[e.wr.k] = e.wr.v;
         prev_snap_arr[e.wr.k] = e.wr.v;
+        log_vector.push_back(e);
 
         highest_committed_idx = idx;
     }
     log_index.store(highest_committed_idx);
+}
+
+// walsnap.cpp
+optional<entry> get_last_log_entry() {
+    lock_guard lock(log_mutex);
+    if (log_vector.empty()) return nullopt;
+    return log_vector.back();
 }

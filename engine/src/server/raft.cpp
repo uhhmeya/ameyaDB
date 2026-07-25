@@ -5,6 +5,8 @@
 #include <vector>
 #include <unordered_set>
 
+optional<entry> get_last_log_entry();
+
 enum Raft_Role {
     FOLLOWER,
     CANDIDATE,
@@ -48,11 +50,3 @@ void raft_init() {
     commit_idx = 0;
 }
 
-void start_election() {
-    curTerm += 1;
-    role = CANDIDATE;
-    vote = node_id;
-    in_votes = {node_id};
-
-    uint32_t term_of_last_wal_entry = 0;
-}
