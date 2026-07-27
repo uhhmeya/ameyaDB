@@ -1,6 +1,7 @@
-#include <thread>
-#include <unistd.h>
 #include "../headers/globals.h"
+#include <unistd.h>
+
+// imports
 void apply_entry(const string& k, const string& v);
 string apply_r(const string& k);
 
@@ -19,7 +20,7 @@ static bool read_tcp(int client_fd, void* buf, size_t n) {
     return true;
 }
 static optional<pair<string,string>> read_kv(int client_fd) {
-    uint32_t k_len{0}, v_len{0};
+    xnt k_len{0}, v_len{0};
     string k, v;
     bool did_read_properly = read_tcp(client_fd, &k_len, sizeof(k_len))
               && (k.resize(k_len), k_len == 0 || read_tcp(client_fd, &k[0], k_len))
@@ -30,14 +31,14 @@ static optional<pair<string,string>> read_kv(int client_fd) {
     return {{k, v}};
 }
 static optional<string> read_k(int client_fd) {
-    uint32_t k_len{0};
+    xnt k_len{0};
     if (!read_tcp(client_fd, &k_len, sizeof(k_len))) return nullopt;
     string k(k_len, '\0');
     if (k_len > 0 && !read_tcp(client_fd, &k[0], k_len)) return nullopt;
     return k;
 }
 
-// (k v) (fn ln tlr) (i t CRC)
+// handlers
 void handle_write(int client_fd) {
     auto kv = read_kv(client_fd);
     if (!kv) {
@@ -48,10 +49,9 @@ void handle_write(int client_fd) {
 
     apply_entry(k, v);
 
-    uint8_t ack = 1;
+    xnt ack = 1;
     write(client_fd, &ack, 1);
 }
-
 void handle_read(int client_fd) {
     auto k = read_k(client_fd);
     if (!k) {
@@ -60,7 +60,7 @@ void handle_read(int client_fd) {
     }
     string v = apply_r(*k);
 
-    uint32_t v_len = static_cast<uint32_t>(v.size());
+    xnt v_len = static_cast<xnt>(v.size());
     write(client_fd, &v_len, sizeof(v_len));
     write(client_fd, v.data(), v_len);
 }

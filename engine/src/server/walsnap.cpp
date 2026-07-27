@@ -20,7 +20,7 @@ static mutex log_mutex;
 static str_arr_2D prev_snap_arr;
 static str_arr_1D dk;
 static vector<entry> log_vector;
-static uint32_t log_base = 0;
+static xnt log_base = 0;
 
 
 static string serialize_entry(const entry& e) {
@@ -45,7 +45,7 @@ void apply_entry(const string& k, const string& v) {
     entry e;
     e.wr.k = k;
     e.wr.v = v;
-    e.stats.forwarding_node = my_node_id;
+    e.stats.forwarding_node = myNodeID;
     e.stats.time_leader_received = now_ms();
 
     {
@@ -87,7 +87,7 @@ void remove_temp_snap() {
         if (entry.path().extension() == ".tmp") remove(entry.path());
     if (exists(WAL_PATH + ".tmp")) remove(WAL_PATH + ".tmp");
 }
-void truncate_wal(uint32_t snap_idx) {
+void truncate_wal(xnt snap_idx) {
     lock_guard lock(log_mutex);
     ifstream old_wal(WAL_PATH);
     ofstream new_wal(WAL_PATH + string(".tmp"));
@@ -100,7 +100,7 @@ void truncate_wal(uint32_t snap_idx) {
         string k, v;
         int fn, ln;
         long long tlr;
-        uint32_t idx, term, cs;
+        xnt idx, term, cs;
         ss >> k >> v >> fn >> ln >> tlr >> idx >> term >> cs;
 
         if (ss.fail()) continue;
@@ -121,7 +121,7 @@ void truncate_wal(uint32_t snap_idx) {
 
 
 void take_pics() {
-    uint32_t prev_snap_idx = 0;
+    xnt prev_snap_idx = 0;
 
     while (true) {
 
@@ -133,7 +133,7 @@ void take_pics() {
 
         str_arr_1D empty;
         str_arr_2D wip_snap_arr = prev_snap_arr;
-        uint32_t snap_idx;
+        xnt snap_idx;
         {
             shared_lock lock(db_mutex);
             swap(empty, dk);
@@ -161,14 +161,14 @@ void take_pics() {
     }
 }
 
-uint32_t load_snap() {
+xnt load_snap() {
     ifstream f(SNAP_DIR_PATH + "snap");
 
     if (!f.is_open()) return 0;
 
     string line;
     getline(f, line);
-    uint32_t snap_idx = stoul(line);
+    xnt snap_idx = stoul(line);
 
     while (getline(f, line)) {
         auto sp = line.find(' ');
@@ -181,7 +181,7 @@ uint32_t load_snap() {
 
     return snap_idx;
 }
-void replay_wal(uint32_t snap_idx) {
+void replay_wal(xnt snap_idx) {
 
     ifstream f(WAL_PATH);
 
@@ -189,7 +189,7 @@ void replay_wal(uint32_t snap_idx) {
         throw runtime_error("[replay_wal] could not open WAL content\n");
 
     log_base = snap_idx;
-    uint32_t highest_committed_idx = snap_idx;
+    xnt highest_committed_idx = snap_idx;
 
     string line;
     while (getline(f, line)) {
@@ -200,7 +200,7 @@ void replay_wal(uint32_t snap_idx) {
         string k, v;
         int fn, ln;
         long long tlr;
-        uint32_t idx, term, cs;
+        xnt idx, term, cs;
         ss >> k >> v >> fn >> ln >> tlr >> idx >> term >> cs;
 
         if (ss.fail()) continue; // partial

@@ -15,14 +15,14 @@ enum Raft_Role {
 
 static const string RAFT_PATH = "../output/raft.txt";
 
-static uint32_t curTerm;
+static xnt curTerm;
 static int vote;
 static int leader;
 static Raft_Role role;
-static uint32_t commit_idx;
+static xnt commit_idx;
 static unordered_set<int> in_votes;
-static vector<uint32_t> sent_len;
-static vector<uint32_t> ack_len;
+static vector<xnt> sent_len;
+static vector<xnt> ack_len;
 
 void raft_init() {
     ifstream f(RAFT_PATH);

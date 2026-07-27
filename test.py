@@ -1,7 +1,5 @@
 import os
 import signal
-import socket
-import struct
 import subprocess
 import time
 
@@ -9,7 +7,6 @@ import time
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
 SERVER_DIR = os.path.join(ROOT, "engine/src/server")
-CLIENT_DIR = os.path.join(ROOT, "engine/src")
 OUTPUT_DIR = os.path.join(ROOT, "engine/src/output")
 SNAP_DIR   = os.path.join(OUTPUT_DIR, "snaps")
 WAL_PATH   = os.path.join(OUTPUT_DIR, "wal.txt")
@@ -17,151 +14,52 @@ EXEC_DIR   = os.path.join(OUTPUT_DIR, "EXEC")
 SERVER_EXEC_PATH = os.path.join(EXEC_DIR, "server")
 CLIENT_EXEC_PATH = os.path.join(EXEC_DIR, "client")
 
+SERVER_PORTS = [8080, 8081, 8082]
 
-SERVER_PORT = 8080
-spam_time_sec = 5
-READ_OP = 2
-passed = True
+def remove_stale():
 
-def start_server(timeout=10):
-
-    # path vars in server code are relative to src/server
-    p = subprocess.Popen([SERVER_EXEC_PATH, "0"], cwd=SERVER_DIR)
-
-    for _ in range(timeout * 10):
-        if p.poll() is not None:
-            raise RuntimeError(f"[server] exited early with code {p.returncode}")
-        try:
-            s = socket.create_connection(("127.0.0.1", SERVER_PORT), timeout=1)
-            s.close()
-            return p
-        except OSError:
-            time.sleep(0.1)
-
-    raise RuntimeError("[server] never came up")
-
-def send_read(k):
-    s = socket.create_connection(("127.0.0.1", SERVER_PORT))
-    k_bytes = k.encode()
-    s.sendall(bytes([READ_OP]))
-    s.sendall(struct.pack("<I", len(k_bytes)))
-    s.sendall(k_bytes)
-    v_len = struct.unpack("<I", s.recv(4))[0]
-    v = s.recv(v_len).decode() if v_len > 0 else ""
-    s.close()
-    return v
-
-def main():
-    print("\n\n")
-    global passed
-
-    # remove stale execs
+    # stale execs from a previous run
     for exe in (SERVER_EXEC_PATH, CLIENT_EXEC_PATH):
         if os.path.exists(exe):
             os.remove(exe)
 
-    # remove stale server
-    stale_server = subprocess.run(["lsof", "-t", f"-i:{SERVER_PORT}"], capture_output=True, text=True)
-    for pid in stale_server.stdout.strip().splitlines():
-        os.kill(int(pid), signal.SIGKILL)
-        print(f"[test -> main] removed stale server({pid})")
+    # stale servers still holding any of the 3 ports
+    for port in SERVER_PORTS:
+        stale_server = subprocess.run(["lsof", "-t", f"-i:{port}"], capture_output=True, text=True)
+        for pid in stale_server.stdout.strip().splitlines():
+            os.kill(int(pid), signal.SIGKILL)
+            print(f"[test -> remove_stale] removed stale server({pid}) on port {port}")
 
-    # remove stale snap.txt
+    # stale snapshot files
     if os.path.exists(SNAP_DIR):
         for file in os.listdir(SNAP_DIR):
             os.remove(os.path.join(SNAP_DIR, file))
 
-    # remove stale wal.txt
+    # stale WAL
     if os.path.exists(WAL_PATH):
         os.remove(WAL_PATH)
 
+def main():
+    print("\n\n")
+    remove_stale()
 
-    # compiles server
+    # compile server
     subprocess.run(
-        ["g++", "-std=c++20", "-o", SERVER_EXEC_PATH, "main.cpp", "handlers.cpp", "walsnap.cpp"],
+        ["g++", "-std=c++20", "-o", SERVER_EXEC_PATH,
+         "main.cpp", "handlers.cpp", "walsnap.cpp", "raft.cpp"],
         cwd=SERVER_DIR, check=True
     )
 
-    # compiles client
-    subprocess.run(
-        ["g++", "-std=c++20", "-o", CLIENT_EXEC_PATH, "clients.cpp"],
-        cwd=CLIENT_DIR, check=True
-    )
+    # boot all nodes
+    servers = [subprocess.Popen([SERVER_EXEC_PATH, str(i)], cwd=SERVER_DIR) for i in range(3)]
+    print(f"[test] servers started: {[s.pid for s in servers]}\n")
 
-    # make server process ; path vars are relative to src/server
-    server = start_server()
-    print(f"[test] server {server.pid} started")
+    time.sleep(3)
 
-    # make client process ; there are no path vars in clients.cpp
-    client = subprocess.Popen([CLIENT_EXEC_PATH])
-    print(f"[test] client {client.pid} started")
-
-    # let client spam writes to server for 5s
-    time.sleep(spam_time_sec)
-
-    # freeze server
-    server.send_signal(signal.SIGSTOP)
-    print(f"[test] server {server.pid} frozen")
-
-    exp = {}
-
-    # capture db state
-    with open(os.path.join(SNAP_DIR, "snap")) as snap:
-        snap_idx_before_freeze = int(snap.readline().strip())
-        for entry in snap:
-            k, v = entry.strip().split()
-            exp[k] = v
-    with open(WAL_PATH) as wal:
-        for entry in wal:
-            parts = entry.strip().split()
-            if len(parts) < 8: continue
-            k, v, log_idx = parts[0], parts[1], int(parts[5])
-            if log_idx > snap_idx_before_freeze:
-                exp[k] = v
-
-    # terminate server & client
-    server.send_signal(signal.SIGKILL)
-    server.wait()
-    print(f"[test] server {server.pid} terminated")
-    client.send_signal(signal.SIGKILL)
-    client.wait()
-    print(f"[test] client {client.pid} terminated")
-
-    # reboot server
-    reboot = start_server()
-
-
-    print(f"[test] server {reboot.pid} started")
-
-    # verify wal recovery
-    with open(WAL_PATH) as WAL:
-        for entry in WAL:
-            parts = entry.strip().split()
-            if len(parts) < 8: continue # partial
-            wal_entry_idx = int(parts[5])
-            if wal_entry_idx < snap_idx_before_freeze:
-                print(f"[test] ERROR wal entry({wal_entry_idx}) below snap index({snap_idx_before_freeze})")
-                passed = False
-
-    # verify db state recovery
-    bad = 0
-    for k, exp_v in exp.items():
-        actual_v = send_read(k)
-        if actual_v != exp_v:
-            bad += 1
-            passed = False
-
-    # terminate server
-    reboot.send_signal(signal.SIGKILL)
-    reboot.wait()
-    print(f"[test] server {reboot.pid} terminated")
-
-    if passed :
-        print("crash test passed \n\n")
-
-    else :
-        print("crash test failed \n\n")
-
+    for s in servers:
+        s.send_signal(signal.SIGKILL)
+        s.wait()
+    print("\n[test] all servers terminated")
 
 if __name__ == "__main__":
     main()

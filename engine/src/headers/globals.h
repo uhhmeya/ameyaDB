@@ -13,6 +13,7 @@ using namespace std::chrono;
 using namespace this_thread;
 using namespace filesystem;
 
+using xnt = uint32_t;
 
 struct write_cmd {
     string k;
@@ -29,9 +30,9 @@ struct entry {
     write_cmd wr;
     raft_stats stats;
 
-    uint32_t log_index{0};
-    uint32_t term{0};
-    uint32_t checksum{0};
+    xnt log_index{0};
+    xnt term{0};
+    xnt checksum{0};
 };
 
 // types
@@ -44,24 +45,22 @@ enum Op {
     READ           = 2,
     REQUEST_VOTE   = 3,
     APPEND_ENTRIES = 4,
+    HELLO          = 5,
 };
 
 
-/*
-we don't know these values until main(). so we assign them in main
-and then make them global via "extern"
-*/
-extern int my_node_id;
-extern std::atomic<uint32_t> log_index;
+// we want to make this global
+extern int myNodeID;
+extern std::atomic<xnt> log_index;
 
 // utils
-inline uint64_t now_ms() {
+inline xnt now_ms() {
     return std::chrono::duration_cast<milliseconds>(
         system_clock::now().time_since_epoch()
     ).count();
 }
-inline uint32_t compute_checksum(const entry& e) {
-    uint32_t crc = 0xFFFFFFFF;
+inline xnt compute_checksum(const entry& e) {
+    xnt crc = 0xFFFFFFFF;
     string data = e.wr.k                                    +
                   e.wr.v                                    +
                   to_string(e.stats.forwarding_node)        +
@@ -70,7 +69,7 @@ inline uint32_t compute_checksum(const entry& e) {
                   to_string(e.log_index)                    +
                   to_string(e.term);
     for (char c : data) {
-        crc ^= static_cast<uint8_t>(c);
+        crc ^= static_cast<xnt>(c);
         for (int j = 0; j < 8; j++)
             crc = (crc >> 1) ^ (0xEDB88320 & -(crc & 1));
     }
@@ -78,7 +77,7 @@ inline uint32_t compute_checksum(const entry& e) {
 }
 
 // shared
-void truncate_wal(uint32_t idx_during_snap);
+void truncate_wal(xnt idx_during_snap);
 
 
 // AWS
@@ -86,13 +85,3 @@ inline const std::string SNS_TOPIC_ARN ="arn:aws:sns:us-east-1:540799520398:amey
 inline const char* PEER_ADDRS[3] = {"node-0.ameyadb.internal","node-1.ameyadb.internal","node-2.ameyadb.internal",};
 inline const std::string QUEUE_URLS[3] = {"https://sqs.us-east-1.amazonaws.com/540799520398/ameyaDB-replication-node-0","https://sqs.us-east-1.amazonaws.com/540799520398/ameyaDB-replication-node-1","https://sqs.us-east-1.amazonaws.com/540799520398/ameyaDB-replication-node-2"};
 
-// Local
-struct addr_t {
-    const char* ip;
-    int port;
-};
-inline const addr_t LOCAL_ADDRS[3] = {
-    {"127.0.0.1", 8080},
-    {"127.0.0.1", 8081},
-    {"127.0.0.1", 8082},
-};
