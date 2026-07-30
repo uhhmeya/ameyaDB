@@ -22,7 +22,7 @@ static str_arr_1D dk;
 static vector<entry> log_vector;
 static xnt log_base = 0;
 
-
+// turns entry into string
 static string serialize_entry(const entry& e) {
     return e.wr.k                                + " " +
            e.wr.v                                + " " +
@@ -33,6 +33,8 @@ static string serialize_entry(const entry& e) {
            to_string(e.term)                      + " " +
            to_string(e.checksum)                  + "\n";
 }
+
+// prevents constant picture taking
 int rand_sleep_timer_ms(int lo, int hi) {
     static thread_local std::mt19937 rng(std::random_device{}());
     std::uniform_int_distribution<int> dist(lo, hi);
@@ -69,24 +71,30 @@ void apply_entry(const string& k, const string& v) {
         dk.insert(e.wr.k);
     }
 }
+
+// read
 string apply_r(const string& k) {
     shared_lock lock(db_mutex);
     auto it = db.find(k);
     return it != db.end() ? it->second : "KEY_NOT_FOUND";
 }
 
-// wal snap stuff
+// ensure walsnap is open
 void ensure_wal_is_open() {
     create_directories(SNAP_DIR_PATH);
     wal.open(WAL_PATH, ios::app);
     if (!wal.is_open())
         throw runtime_error("[main] could not setup write handler");
 }
+
+// remove temp snap on reboot
 void remove_temp_snap() {
     for (auto& entry : directory_iterator(SNAP_DIR_PATH))
         if (entry.path().extension() == ".tmp") remove(entry.path());
     if (exists(WAL_PATH + ".tmp")) remove(WAL_PATH + ".tmp");
 }
+
+// truncate wal
 void truncate_wal(xnt snap_idx) {
     lock_guard lock(log_mutex);
     ifstream old_wal(WAL_PATH);
@@ -119,7 +127,7 @@ void truncate_wal(xnt snap_idx) {
     log_base = snap_idx;
 }
 
-
+// create snapshots
 void take_pics() {
     xnt prev_snap_idx = 0;
 
@@ -161,6 +169,7 @@ void take_pics() {
     }
 }
 
+// load snap into DB
 xnt load_snap() {
     ifstream f(SNAP_DIR_PATH + "snap");
 
@@ -181,6 +190,8 @@ xnt load_snap() {
 
     return snap_idx;
 }
+
+// replay wal entry not covered by snap
 void replay_wal(xnt snap_idx) {
 
     ifstream f(WAL_PATH);
@@ -229,7 +240,7 @@ void replay_wal(xnt snap_idx) {
     log_index.store(highest_committed_idx);
 }
 
-// walsnap.cpp
+// get last log entry
 optional<entry> get_last_log_entry() {
     lock_guard lock(log_mutex);
     if (log_vector.empty()) return nullopt;
