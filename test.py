@@ -46,7 +46,7 @@ def main():
     # compile server
     subprocess.run(
         ["g++", "-std=c++20", "-o", SERVER_EXEC_PATH,
-         "main.cpp", "handlers.cpp", "walsnap.cpp", "raft.cpp"],
+         "main.cpp", "handlers.cpp", "walsnap.cpp", "threads.cpp"],
         cwd=SERVER_DIR, check=True
     )
 

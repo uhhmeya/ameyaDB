@@ -5,20 +5,21 @@
 #include <csignal>
 #include <cstring>
 #include <cerrno>
+#include <string>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
 #include "../headers/globals.h"
+#include "../headers/threads.h"
 
 int myNodeID;
 atomic<xnt> log_index{0};
 
-int NUM_NODES = 3;
-
 static atomic<int> my_fd_to[NUM_NODES] = {-1, -1, -1};
 
+// announce
 void handle_write(int x);
 void handle_read(int x);
 void ensure_wal_is_open();
@@ -26,9 +27,8 @@ void remove_temp_snap();
 void take_pics();
 xnt load_snap();
 void replay_wal(xnt x);
-void dispatch(int conn_fd);
+void dispatch(int peerFD);
 
-// establish TCP connection & send hello msg
 static int initiate(int peer_id) {
     int backoff_ms = 100;
     int peerPort = 8080 + peer_id;
@@ -49,12 +49,12 @@ static int initiate(int peer_id) {
             // peer accepted then died mid-handshake -- transient, fall through and retry
         }
         close(fd);
+        print("node" + to_string(peer_id) + " unreachable, retrying in " + to_string(backoff_ms) + "ms");
         sleep_for(milliseconds(backoff_ms));
         backoff_ms = min(backoff_ms * 2, 3000);   // back off for real, cap at 3s
     }
 }
 
-// attaches listener to port
 int attach_listener_to_port(int myPort) {
     int listener_fd = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -77,8 +77,6 @@ int attach_listener_to_port(int myPort) {
     return listener_fd;
 }
 
-// called by acceptor.
-// Reads hello msg & returns initiators nodeID
 static int read_hello(int fd) {
     char first = 0;
     if (recv(fd, &first, 1, MSG_PEEK) != 1 || first != HELLO)
@@ -89,68 +87,87 @@ static int read_hello(int fd) {
     return (msg[1] >= 0 && msg[1] < NUM_NODES) ? msg[1] : -1;
 }
 
-// initiates tcp connection to assigned peer if wire breaks
-// keeps READER on initiator's socket
-static void keep_initiator_on_wire(int peer_id) {
+static void put_acceptor_on_wire(int peerFD) {
+
+    // (1) (acceptor) (spawned)
+    Thr.set_type("acceptor");
+    print("spawned");
+
+    int sender_id = read_hello(peerFD);
+
+    // (1) (2<-acceptor) (parked on wire)
+    if (sender_id != -1) {
+        Thr.set_type(to_string(sender_id) + "<-acceptor");
+        my_fd_to[sender_id] = peerFD;
+    }
+
+    print("parked on wire");
+    dispatch(peerFD); //parks
+    print("wire broke");
+
+    //close connection
+    int stale = peerFD;
+    my_fd_to[sender_id].compare_exchange_strong(stale, -1);
+    close(peerFD);
+    print("thread down");
+}
+
+void dispatch(int peerFD) {
+    char op = 0;
     while (true) {
-        int fd = initiate(peer_id); //! blocking
+        if (read(peerFD, &op, 1) != 1)
+            break;  //wire broke
+
+        if (op == WRITE) {
+            handle_write(peerFD);
+        }
+
+        else if (op == READ) {
+            handle_read(peerFD);
+        }
+    }
+}
+
+static void accept_forever(int listener) {
+    while (true) {
+
+        // every node's main thread parks here
+        print("parked in accept");
+
+        int peerFD = accept(listener, nullptr, nullptr);
+        if (peerFD < 0) continue;
+
+        thread([peerFD]() {
+            put_acceptor_on_wire(peerFD);
+        }).detach();
+    }
+}
+
+static void keep_initiator_on_wire(int peer_id) {
+
+    //(1) (initiator->2) (spawned)
+    Thr.set_type("initiator->" + to_string(peer_id));
+    print("spawned");
+
+    while (true) {
+        int fd = initiate(peer_id); //blocking
         my_fd_to[peer_id] = fd;
-        dispatch(fd); // parks until the wire breaks
-        my_fd_to[peer_id] = -1; // off the wire
+        print("parked on wire");
+        dispatch(fd); //parks
+        print("wire broke");
+        my_fd_to[peer_id] = -1;
         close(fd);
     }
 }
 
-// keeps READER on acceptor's socket
-// called when initiator sends SYN packet
-static void put_acceptor_on_wire(int fd) {
-    int sender_id = read_hello(fd);
-
-    if (sender_id != -1)
-        my_fd_to[sender_id] = fd;
-
-    dispatch(fd);
-
-    if (sender_id != -1) {
-        int stale = fd;
-        my_fd_to[sender_id].compare_exchange_strong(stale, -1);
-    }
-    close(fd);
-}
-
-// sends messages to the proper handler
-void dispatch(int conn_fd) {
-    char op = 0;
-    while (read(conn_fd, &op, 1) == 1) {
-
-        if (op == WRITE)
-            handle_write(conn_fd);
-
-        else if (op == READ)
-            handle_read(conn_fd);
-
-        else break;   //?
-    }
-}
-
-// parking lot for all nodes' main threads
-// creates acceptor threads and calls put_acceptor_on_wire() when it receives SYN packet
-static void accept_forever(int listener_fd) {
-    while (true) {
-
-        // every node's main thread parks here
-        int conn_fd = accept(listener_fd, nullptr, nullptr);
-        if (conn_fd < 0) continue;
-
-        thread([conn_fd]() { put_acceptor_on_wire(conn_fd); }).detach();
-    }
-}
-
 // (k v) (fn ln tlr) (i t CRC)
-// restores DB from wal & connects cluster
 int main(int argc, char *argv[]) {
 
     myNodeID = stoi(argv[1]);
+
+    // (1) (main) (spawned)
+    Thr.set_type("main");
+    print("spawned");
 
     /*
     1. node0 sends op code to node2
@@ -175,13 +192,14 @@ int main(int argc, char *argv[]) {
         take_pics();
     }).detach();
 
-    int listener = attach_listener_to_port(8080 + myNodeID);
+    int myPort = 8080 + myNodeID;
+    int listener = attach_listener_to_port(myPort);
 
-    for (int peer = myNodeID + 1; peer < NUM_NODES; ++peer)
-
+    for (int peer = myNodeID + 1; peer < NUM_NODES; ++peer) {
         thread([peer] {
             keep_initiator_on_wire(peer);
         }).detach();
+    }
 
     accept_forever(listener);
 }

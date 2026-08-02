@@ -13,13 +13,17 @@ using namespace std::chrono;
 using namespace this_thread;
 using namespace filesystem;
 
+// type alias
 using xnt = uint32_t;
+
+// global, un-changing, variables
+inline constexpr int NUM_NODES = 3;
+
 
 struct write_cmd {
     string k;
     string v;
 };
-
 struct raft_stats {
     int  forwarding_node{0};
     int  leader_node{0};
