@@ -2,6 +2,7 @@
 ameyaDB is a distributed KV store
 
 # usage
+run `npm run dev` from `/ameyaDB/frontend`
 run `python3 test.py` from `/ameyaDB`
 
 # main.cpp
