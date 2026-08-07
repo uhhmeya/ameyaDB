@@ -2,6 +2,10 @@ import os
 import signal
 import subprocess
 import time
+from datetime import datetime
+
+def log(msg):
+    print(f"{datetime.now().strftime('%H:%M:%S')} {msg}")
 
 # ./ameyaDB
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -52,14 +56,14 @@ def main():
 
     # boot all nodes
     servers = [subprocess.Popen([SERVER_EXEC_PATH, str(i)], cwd=SERVER_DIR) for i in range(3)]
-    print(f"[test] servers started: {[s.pid for s in servers]}\n")
+    log(f"servers started: {[s.pid for s in servers]}")
 
     time.sleep(3)
 
     for s in servers:
         s.send_signal(signal.SIGKILL)
         s.wait()
-    print("\n[test] all servers terminated")
+    log("all servers terminated")
 
 if __name__ == "__main__":
     main()

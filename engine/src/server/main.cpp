@@ -49,7 +49,7 @@ static int initiate(int peer_id) {
             // peer accepted then died mid-handshake -- transient, fall through and retry
         }
         close(fd);
-        print("node" + to_string(peer_id) + " unreachable, retrying in " + to_string(backoff_ms) + "ms");
+        print(to_string(peer_id) + " unreachable, retrying in " + to_string(backoff_ms) + "ms");
         sleep_for(milliseconds(backoff_ms));
         backoff_ms = min(backoff_ms * 2, 3000);   // back off for real, cap at 3s
     }
@@ -128,11 +128,11 @@ void dispatch(int peerFD) {
     }
 }
 
-static void accept_forever(int listener) {
+static void accept_4ever(int listener) {
     while (true) {
 
         // every node's main thread parks here
-        print("parked in accept");
+        print("parked in accept_4ever");
 
         int peerFD = accept(listener, nullptr, nullptr);
         if (peerFD < 0) continue;
@@ -201,5 +201,5 @@ int main(int argc, char *argv[]) {
         }).detach();
     }
 
-    accept_forever(listener);
+    accept_4ever(listener);
 }

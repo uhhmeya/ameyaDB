@@ -1,44 +1,17 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 
-const RELAY_URL = "ws://localhost:8765"
-const INITIAL_BACKOFF = 500
-const MAX_BACKOFF = 5000
+type LandingProps = {
+    connected: boolean
+}
 
-function Landing() {
-    const wsRef = useRef<WebSocket | null>(null)
-    const backoffRef = useRef(INITIAL_BACKOFF)
-    const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-    const cancelledRef = useRef(false)
+function Landing({ connected }: LandingProps) {
+    const navigate = useNavigate()
 
-    // tries to connect to relay on browser boot
+    // once relay connects, go to the run screen
     useEffect(() => {
-        connect_to_relay()
-        return () => disconnect_from_relay()
-    }, [])
-
-    function connect_to_relay() {
-        cancelledRef.current = false
-        const ws = new WebSocket(RELAY_URL)
-        wsRef.current = ws
-
-        // relay accepts connection
-        ws.onopen = () => {
-            backoffRef.current = INITIAL_BACKOFF
-        }
-
-        // relay is not running
-        ws.onclose = () => {
-            if (cancelledRef.current) return
-            timeoutRef.current = setTimeout(connect_to_relay, backoffRef.current)
-            backoffRef.current = Math.min(backoffRef.current * 2, MAX_BACKOFF)
-        }
-    }
-
-    function disconnect_from_relay() {
-        cancelledRef.current = true
-        if (timeoutRef.current) clearTimeout(timeoutRef.current)
-        wsRef.current?.close()
-    }
+        if (connected) navigate('/run')
+    }, [connected])
 
     return (
         <div className="fullscreen">
