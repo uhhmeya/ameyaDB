@@ -6,18 +6,20 @@
 #include <cstring>
 #include <cerrno>
 #include <string>
+#include <vector>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <netdb.h>
 
 #include "../headers/globals.h"
 #include "../headers/threads.h"
 
 int myNodeID;
 atomic<xnt> log_index{0};
-
-static atomic<int> my_fd_to[NUM_NODES] = {-1, -1, -1};
+vector<atomic<int>> my_fd_to;
+atomic<int> relay_fd{-1};
 
 // announce
 void handle_write(int x);
@@ -27,34 +29,16 @@ void remove_temp_snap();
 void take_pics();
 xnt load_snap();
 void replay_wal(xnt x);
-void dispatch(int peerFD);
+void attach_reader_to_tcp_wire(int peer_id);
 
-static int initiate(int peer_id) {
-    int backoff_ms = 100;
-    int peerPort = 8080 + peer_id;
-    while (true) {
-        // a socket that failed connect() is unusable -- make a fresh one each try
-        int fd = socket(AF_INET, SOCK_STREAM, 0);
-        if (fd < 0)
-            throw runtime_error("[initiate] socket failed: " + string(strerror(errno)));
-        sockaddr_in addr{};
-        addr.sin_family = AF_INET;
-        addr.sin_port = htons(peerPort);
-        inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
-        if (connect(fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) == 0) {
-            // initiator sends his nodeID
-            char msg[2] = { HELLO, static_cast<char>(myNodeID) };
-            if (write(fd, msg, 2) == 2)
-                return fd;
-            // peer accepted then died mid-handshake -- transient, fall through and retry
-        }
-        close(fd);
-        print(to_string(peer_id) + " unreachable, retrying in " + to_string(backoff_ms) + "ms");
-        sleep_for(milliseconds(backoff_ms));
-        backoff_ms = min(backoff_ms * 2, 3000);   // back off for real, cap at 3s
-    }
+// utils
+static bool say_hi_to_relay(int fd) {
+    string hello = "HELLO " + to_string(myNodeID) + "\n";
+    return write(fd, hello.c_str(), hello.size()) == static_cast<ssize_t>(hello.size());
 }
-
+static string link_id(int a, int b) {
+    return to_string(min(a, b)) + "<--->" + to_string(max(a, b));
+}
 int attach_listener_to_port(int myPort) {
     int listener_fd = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -71,48 +55,157 @@ int attach_listener_to_port(int myPort) {
     if (::bind(listener_fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) < 0)
         throw runtime_error("[attach_listener_to_port] bind failed: " + string(strerror(errno)));
 
-    if (listen(listener_fd, 10) < 0)
+    // a whole cluster can dial in at once -- let the backlog grow with it
+    if (listen(listener_fd, max(10, NUM_NODES)) < 0)
         throw runtime_error("[attach_listener_to_port] listen failed: " + string(strerror(errno)));
 
     return listener_fd;
 }
-
 static int read_hello(int fd) {
     char first = 0;
     if (recv(fd, &first, 1, MSG_PEEK) != 1 || first != HELLO)
         return -1;
-    char msg[2] = {};
-    if (recv(fd, msg, 2, MSG_WAITALL) != 2)
+    char msg[1 + sizeof(int)] = {};
+    if (recv(fd, msg, sizeof(msg), MSG_WAITALL) != static_cast<ssize_t>(sizeof(msg)))
         return -1;
-    return (msg[1] >= 0 && msg[1] < NUM_NODES) ? msg[1] : -1;
+    int sender_id = -1;
+    memcpy(&sender_id, &msg[1], sizeof(sender_id));
+    return (sender_id >= 0 && sender_id < NUM_NODES) ? sender_id : -1;
 }
 
-static void put_acceptor_on_wire(int peerFD) {
+// constantly spams connection req to relay
+// when relay is up, tcp wire will exist between node & relay
+static int initiate_to_relay(const string &host, int port) {
+    int backoff_ms = 100;
+    while (true) {
+        int fd = socket(AF_INET, SOCK_STREAM, 0);
+        if (fd >= 0) {
+            sockaddr_in addr{};
+            addr.sin_family = AF_INET;
+            addr.sin_port = htons(port);
 
-    // (1) (acceptor) (spawned)
+            bool resolved = inet_pton(AF_INET, host.c_str(), &addr.sin_addr) == 1;
+            if (!resolved) {
+                addrinfo hints{};
+                hints.ai_family = AF_INET;
+                hints.ai_socktype = SOCK_STREAM;
+                addrinfo *res = nullptr;
+                if (getaddrinfo(host.c_str(), nullptr, &hints, &res) == 0 && res) {
+                    addr.sin_addr = reinterpret_cast<sockaddr_in *>(res->ai_addr)->sin_addr;
+                    freeaddrinfo(res);
+                    resolved = true;
+                }
+            }
+
+            if (resolved && connect(fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) == 0)
+                return fd;
+
+            close(fd);
+        }
+        sleep_for(milliseconds(backoff_ms));
+        backoff_ms = min(backoff_ms * 2, 3000);
+    }
+}
+
+// constantly spams connection req to peer
+// when peer is up, tcp wire will exist between peer & relay
+static int initiate_to_peer(int peer_id) {
+    int backoff_ms = 100;
+    int peerPort = 8080 + peer_id;
+    while (true) {
+        // a socket that failed connect() is unusable -- make a fresh one each try
+        int fd = socket(AF_INET, SOCK_STREAM, 0);
+        if (fd < 0)
+            throw runtime_error("[initiate] socket failed: " + string(strerror(errno)));
+        sockaddr_in addr{};
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(peerPort);
+        inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
+        if (connect(fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) == 0) {
+            // initiator sends his nodeID -- as a full int (same raw encoding
+            // build_vote_request uses), so an id no longer has to fit in one char
+            char msg[1 + sizeof(int)];
+            msg[0] = HELLO;
+            memcpy(&msg[1], &myNodeID, sizeof(myNodeID));
+            if (write(fd, msg, sizeof(msg)) == static_cast<ssize_t>(sizeof(msg)))
+                return fd;
+            // peer accepted then died mid-handshake -- transient, fall through and retry
+        }
+        close(fd);
+        sleep_for(milliseconds(backoff_ms));
+        backoff_ms = min(backoff_ms * 2, 3000);   // back off for real, cap at 3s
+    }
+}
+
+// keeps connection between node & relay
+static void keep_relay_initiator_on_wire(string host, int port) {
+    Thr.set_type("relay");
+
+    while (true) {
+        int fd = initiate_to_relay(host, port);   // blocks until connected
+
+        if (!say_hi_to_relay(fd)) {
+            close(fd);
+            continue;
+        }
+
+        // connected :)
+        relay_fd = fd;
+
+        // disconnected :(
+        char buf[1];
+        read(fd, buf, sizeof(buf));
+        relay_fd = -1;
+        close(fd);
+    }
+}
+
+// keeps connection between peers
+static void keep_peer_initiator_on_wire(int peer_id) {
+    Thr.set_type("initiator->" + to_string(peer_id));
+
+    while (true) {
+
+        /* creates tcp wire between 2 nodes
+         * each node needs to have 2 threads, 1 for reading
+         * and 1 for writing in order for the link to exist
+        */
+        int fd = initiate_to_peer(peer_id); // blocking
+        my_fd_to[peer_id] = fd;
+
+        attach_reader_to_tcp_wire(peer_id); //parks
+        my_fd_to[peer_id] = -1;
+        close(fd);
+    }
+}
+
+//
+static void put_acceptor_on_wire(int peerFD) {
     Thr.set_type("acceptor");
-    print("spawned");
 
     int sender_id = read_hello(peerFD);
-
-    // (1) (2<-acceptor) (parked on wire)
-    if (sender_id != -1) {
-        Thr.set_type(to_string(sender_id) + "<-acceptor");
-        my_fd_to[sender_id] = peerFD;
+    if (sender_id == -1) {
+        close(peerFD);
+        return;
     }
 
-    print("parked on wire");
-    dispatch(peerFD); //parks
-    print("wire broke");
+    Thr.set_type(to_string(sender_id) + "<-acceptor");
+    my_fd_to[sender_id] = peerFD;
 
-    //close connection
+    attach_reader_to_tcp_wire(sender_id);
+
     int stale = peerFD;
     my_fd_to[sender_id].compare_exchange_strong(stale, -1);
     close(peerFD);
-    print("thread down");
 }
 
-void dispatch(int peerFD) {
+void attach_reader_to_tcp_wire(int peer_id) {
+    int peerFD = my_fd_to[peer_id].load();
+
+    string msg = "reader attached to " + to_string(myNodeID) +
+                 " on tcp wire " + to_string(myNodeID) + " --- " + to_string(peer_id);
+    send_to_relay(relay_fd, msg);
+
     char op = 0;
     while (true) {
         if (read(peerFD, &op, 1) != 1)
@@ -129,45 +222,40 @@ void dispatch(int peerFD) {
 }
 
 static void accept_4ever(int listener) {
+
+    // main thread parks here forever, accepting new peer connections
     while (true) {
-
-        // every node's main thread parks here
-        print("parked in accept_4ever");
-
         int peerFD = accept(listener, nullptr, nullptr);
         if (peerFD < 0) continue;
-
-        thread([peerFD]() {
-            put_acceptor_on_wire(peerFD);
-        }).detach();
-    }
-}
-
-static void keep_initiator_on_wire(int peer_id) {
-
-    //(1) (initiator->2) (spawned)
-    Thr.set_type("initiator->" + to_string(peer_id));
-    print("spawned");
-
-    while (true) {
-        int fd = initiate(peer_id); //blocking
-        my_fd_to[peer_id] = fd;
-        print("parked on wire");
-        dispatch(fd); //parks
-        print("wire broke");
-        my_fd_to[peer_id] = -1;
-        close(fd);
+        thread([peerFD]() { put_acceptor_on_wire(peerFD); }).detach();
     }
 }
 
 // (k v) (fn ln tlr) (i t CRC)
 int main(int argc, char *argv[]) {
 
-    myNodeID = stoi(argv[1]);
+    if (argc != 3)
+        cerr << "usage: " << argv[0] << " <nodeID> <your_ip>\n";
 
-    // (1) (main) (spawned)
     Thr.set_type("main");
-    print("spawned");
+
+    myNodeID = stoi(argv[1]);
+    string relay_ip = argv[2];
+
+    constexpr int relay_port = 9000;
+
+    // spawn relay thread to connect node to relay
+    thread([relay_ip] {
+        keep_relay_initiator_on_wire(relay_ip, relay_port);
+    }).detach();
+
+    // park main thread until connected to relay
+    while (relay_fd.load() == -1)
+        sleep_for(milliseconds(50));
+
+    // my_fd_to = (-1,-1,-1,-1,-1)
+    my_fd_to = vector<atomic<int>>(NUM_NODES);
+    for (auto &fd : my_fd_to) fd = -1;
 
     /*
     1. node0 sends op code to node2
@@ -192,13 +280,26 @@ int main(int argc, char *argv[]) {
         take_pics();
     }).detach();
 
+    // TOY: node 0 heartbeats to the relay so we can verify the display path
+    if (myNodeID == 0) {
+        thread([] {
+            Thr.set_type("toy");
+            for (int i = 0; ; ++i) {
+                send_to_relay(relay_fd, "toy message " + to_string(i));
+                sleep_for(milliseconds(1000));
+            }
+        }).detach();
+    }
+
     int myPort = 8080 + myNodeID;
     int listener = attach_listener_to_port(myPort);
 
     for (int peer = myNodeID + 1; peer < NUM_NODES; ++peer) {
+
         thread([peer] {
-            keep_initiator_on_wire(peer);
+            keep_peer_initiator_on_wire(peer);
         }).detach();
+
     }
 
     accept_4ever(listener);

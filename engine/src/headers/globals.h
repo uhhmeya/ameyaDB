@@ -4,8 +4,9 @@
 #include <shared_mutex>
 #include <unordered_map>
 #include <fstream>
-#include <chrono>
+#include <random>
 #include <unordered_set>
+#include <__random/random_device.h>
 
 // namespaces
 using namespace std;
@@ -13,12 +14,10 @@ using namespace std::chrono;
 using namespace this_thread;
 using namespace filesystem;
 
-// type alias
+// types
+using str_arr_1D = unordered_set<string>;
+using str_arr_2D = unordered_map<string, string>;
 using xnt = uint32_t;
-
-// global, un-changing, variables
-inline constexpr int NUM_NODES = 3;
-
 
 struct write_cmd {
     string k;
@@ -29,7 +28,6 @@ struct raft_stats {
     int  leader_node{0};
     int time_leader_received{0};
 };
-
 struct entry {
     write_cmd wr;
     raft_stats stats;
@@ -38,10 +36,6 @@ struct entry {
     xnt term{0};
     xnt checksum{0};
 };
-
-// types
-using str_arr_1D = unordered_set<string>;
-using str_arr_2D = unordered_map<string, string>;
 
 // enums
 enum Op {
@@ -52,10 +46,12 @@ enum Op {
     HELLO          = 5,
 };
 
-
-// we want to make this global
+// global variables
 extern int myNodeID;
 extern std::atomic<xnt> log_index;
+inline constexpr int NUM_NODES = 5;
+extern std::vector<std::atomic<int>> my_fd_to;
+extern std::atomic<int> relay_fd;
 
 // utils
 inline xnt now_ms() {
@@ -79,10 +75,17 @@ inline xnt compute_checksum(const entry& e) {
     }
     return crc ^ 0xFFFFFFFF;
 }
+inline int rand_sleep_timer_ms(int lo, int hi) {
+    static thread_local mt19937 rng(std::random_device{}());
+    uniform_int_distribution<int> dist(lo, hi);
+    return dist(rng);
+}
 
 // shared
 void truncate_wal(xnt idx_during_snap);
-
+xnt get_log_length();
+xnt get_last_log_term();
+bool send_to_peer(int peer, const string& buf);
 
 // AWS
 inline const std::string SNS_TOPIC_ARN ="arn:aws:sns:us-east-1:540799520398:ameyaDB-replication";

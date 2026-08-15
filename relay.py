@@ -5,8 +5,8 @@ import json
 from datetime import datetime
 
 # only ports from this computer can connect
-TCP_HOST = "127.0.0.1"
-WS_HOST = "127.0.0.1"
+TCP_HOST = "0.0.0.0"
+WS_HOST = "0.0.0.0"
 
 # nodes send msg to 9000
 # relay reads msg from 9000
@@ -19,6 +19,7 @@ WS_PORT = 8765
 # browser is not connected yet
 browser = None
 
+SLEEP_THRESHOLD = 60 # seconds
 
 def log(msg):
     print(f"{datetime.now().strftime('%H:%M:%S')} {msg}")
@@ -26,18 +27,8 @@ def log(msg):
 
 async def run_test():
 
-    proc = await asyncio.create_subprocess_exec(
-        "python3", "test.py",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.STDOUT,
-    )
-    # stream the script's output back to the browser as it runs
-    async for raw_line in proc.stdout:
-        line = raw_line.decode("utf-8", errors="replace").rstrip("\n")
-        if line:
-            print(line)
-            await send_to_browser(line)
-
+    # run test.py
+    proc = await asyncio.create_subprocess_exec("python3", "test.py",)
     returncode = await proc.wait()
     log(f"test.py exited with code {returncode}")
 
@@ -76,25 +67,23 @@ async def on_TCP(reader, writer):
         print(f"TCP node disconnected: {peer}")
         writer.close()
 
-
 # called when browser connects to relay
 async def on_WS(websocket):
     global browser
     browser = websocket
-    log(f"browser ({websocket.remote_address[1]}) connected")
+    conn_id = websocket.remote_address[1]
+    log(f"browser ({conn_id}) connected")
 
-    # keep browser connected
     try:
         async for raw in websocket:
             msg = json.loads(raw)["msg"]
             if msg == "run_test.py":
                 asyncio.create_task(run_test())
 
-    # if relay crashes or browser closes...
-    finally:
-        if browser is websocket:
-            browser = None
-        log(f"browser ({websocket.remote_address[1]}) disconnected")
+    except websockets.exceptions.ConnectionClosed:
+        log(f"browser ({conn_id}) disconnected")
+
+    return
 
 async def main():
 

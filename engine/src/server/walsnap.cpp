@@ -36,13 +36,6 @@ static string serialize_entry(const entry& e) {
            to_string(e.checksum)                  + "\n";
 }
 
-// prevents constant picture taking
-int rand_sleep_timer_ms(int lo, int hi) {
-    static thread_local std::mt19937 rng(std::random_device{}());
-    std::uniform_int_distribution<int> dist(lo, hi);
-    return dist(rng);
-}
-
 // commit
 void apply_entry(const string& k, const string& v) {
 
@@ -68,7 +61,6 @@ void apply_entry(const string& k, const string& v) {
             wal.flush();
             log_vector.push_back(e);
         }
-
         db[e.wr.k] = e.wr.v;
         dk.insert(e.wr.k);
     }
@@ -248,4 +240,14 @@ optional<entry> get_last_log_entry() {
     lock_guard lock(log_mutex);
     if (log_vector.empty()) return nullopt;
     return log_vector.back();
+}
+
+xnt get_log_length() {
+    lock_guard lock(log_mutex);
+    return log_base + static_cast<xnt>(log_vector.size());
+}
+
+xnt get_last_log_term() {
+    lock_guard lock(log_mutex);
+    return log_vector.empty() ? 0 : log_vector.back().term;
 }

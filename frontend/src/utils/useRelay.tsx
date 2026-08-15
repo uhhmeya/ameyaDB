@@ -10,6 +10,7 @@ export function useRelay() {
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const cancelledRef = useRef(false)
     const [connected, setConnected] = useState(false)
+    const [messages, setMessages] = useState<string[]>([])
 
     // tries to connect to relay on mount
     useEffect(() => {
@@ -28,8 +29,16 @@ export function useRelay() {
             setConnected(true)
         }
 
+        // a node logged something -- relay forwarded it here
+        ws.onmessage = (event) => {
+            setMessages(prev => [...prev, event.data])
+        }
+
         // relay is not running / connection dropped
         ws.onclose = () => {
+            // stale socket from a StrictMode remount -- ignore it
+            if (wsRef.current !== ws) return
+
             setConnected(false)
             if (cancelledRef.current) return
             timeoutRef.current = setTimeout(connect_to_relay, backoffRef.current)
@@ -50,5 +59,5 @@ export function useRelay() {
         }
     }, [])
 
-    return { connected, send_msg }
+    return { connected, messages, send_msg }
 }

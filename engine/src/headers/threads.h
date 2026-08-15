@@ -15,3 +15,4 @@ class ThreadInfo {
 extern thread_local ThreadInfo Thr;
 
 void print(const std::string &msg);
+void send_to_relay(int fd, const std::string &msg);
