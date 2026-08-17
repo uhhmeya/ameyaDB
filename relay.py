@@ -45,8 +45,10 @@ async def send_to_browser(msg):
 # reader receives bytes from wire
 # writer sends bytes into wire
 async def on_TCP(reader, writer):
+
+    # node connected : (ip,port)
     peer = writer.get_extra_info("peername")
-    print(f"TCP node connected: {peer}")
+    print(f"node connected : {peer}")
     node_id = None
     try:
 
