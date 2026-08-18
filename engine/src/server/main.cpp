@@ -145,7 +145,6 @@ static int initiate_to_peer(int peer_id) {
 
 // keeps connection between node & relay
 static void keep_relay_initiator_on_wire(string host, int port) {
-    Thr.set_type("relay");
     while (true) {
         int fd = initiate_to_relay(host, port);   // blocks until connected
         relay_fd = fd;
@@ -158,8 +157,6 @@ static void keep_relay_initiator_on_wire(string host, int port) {
 
 // keeps connection between peers
 static void keep_peer_initiator_on_wire(int peer_id) {
-    Thr.set_type("initiator->" + to_string(peer_id));
-
     while (true) {
 
         int fd = initiate_to_peer(peer_id);
@@ -176,7 +173,6 @@ static void keep_peer_initiator_on_wire(int peer_id) {
 }
 
 static void put_acceptor_on_wire(int peerFD) {
-    Thr.set_type("acceptor");
     set_keepalive(peerFD);
 
     int sender_id = read_hello(peerFD);
@@ -185,7 +181,6 @@ static void put_acceptor_on_wire(int peerFD) {
         return;
     }
 
-    Thr.set_type(to_string(sender_id) + "<-acceptor");
     my_fd_to[sender_id] = peerFD;
     send_to_relay(relay_fd, to_string(myNodeID) + " put writer on " + link_id(myNodeID, sender_id));
 
@@ -227,8 +222,6 @@ int main(int argc, char *argv[]) {
         cerr << "usage: " << argv[0] << " <nodeID> <relay_ip>\n";
         return 1;
     }
-
-    Thr.set_type("main");
 
     myNodeID = stoi(argv[1]);
     string relay_ip = argv[2];

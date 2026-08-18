@@ -11,7 +11,6 @@ Socket is end of wire that reads and writes bytes. Socket is identified by FD.
 You can read from & write to an FD at the same time!
 However, you can't have 2 threads writing 2 an FD at the same time.
 
-
 - **`initiate(peer_id)`**
   - establish TCP connection & send hello msg
 - **`attach_listener_to_port(myPort)`**
@@ -51,3 +50,12 @@ Parses KV to wire & sends it to walsnap
 - **`replay_wal`**
   - replay wal entry not covered by snap
 - **`get_last_log_entry`**
+
+# Why is my IDE not recognizing the CPP files?
+1. run `cmake -S . -B build` from `engine\`
+2. click the `file` on the top left of your screen
+3. click invalidate caches
+4. click invalidate & restart
+
+# AWS NOTE
+install clockbound

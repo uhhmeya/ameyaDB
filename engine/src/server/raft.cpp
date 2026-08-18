@@ -106,10 +106,6 @@ static void save_termVote() {
 }
 
 
-
-
-
-
 static void put(string& b, const void* p, size_t n) {
     b.append(static_cast<const char*>(p), n);
 }

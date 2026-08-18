@@ -123,7 +123,6 @@ void truncate_wal(xnt snap_idx) {
 
 // create snapshots
 void take_pics() {
-    Thr.set_type("take_pics bthread");
     xnt prev_snap_idx = 0;
 
     while (true) {

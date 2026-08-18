@@ -115,6 +115,103 @@ html, body {
     outline-offset: 4px;
 }
 
+/* debug page: header row of node cards, one-line summary, log fills the rest */
+.debug-page {
+    justify-content: flex-start;
+    gap: clamp(1.25rem, 3vh, 2rem);
+    padding: clamp(1.5rem, 4vh, 3rem) clamp(1.5rem, 4vw, 4rem);
+    overflow: hidden;
+}
+
+.node-row {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    animation: fade-up 0.5s ease both;
+}
+
+.node-card {
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.95rem;
+    line-height: 1.55;
+    letter-spacing: 0.02em;
+    color: rgba(255, 255, 255, 0.92);
+    background: rgba(0, 0, 0, 0.18);
+    border: 1px solid transparent;
+    border-radius: 12px;
+    padding: 0.7em 1.1em;
+    min-width: 8.5em;
+}
+
+/* quiet when healthy, faint outline when a link is off, filled when fully cut off,
+   dimmed when never heard from */
+.node-card.degraded {
+    border-color: rgba(240, 147, 43, 0.55);
+}
+
+.node-card.down {
+    border-color: #f0932b;
+    background: #f0932b;
+    color: #2b2318;
+}
+
+.node-card.down .node-card-id {
+    color: #2b2318;
+}
+
+.node-card.silent {
+    opacity: 0.55;
+}
+
+.node-card-id {
+    color: #f0932b;
+    font-weight: 700;
+}
+
+.cluster-summary {
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 1rem;
+    letter-spacing: 0.02em;
+    color: rgba(255, 255, 255, 0.92);
+    animation: fade-up 0.5s ease both;
+}
+
+.cluster-summary .alert {
+    color: #f0932b;
+    font-weight: 700;
+}
+
+.log {
+    flex: 1;
+    min-height: 0;
+    width: min(100%, 72rem);
+    box-sizing: border-box;
+    overflow-y: auto;
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.7;
+    letter-spacing: 0.01em;
+    color: rgba(255, 255, 255, 0.85);
+    background: rgba(0, 0, 0, 0.18);
+    border-radius: 12px;
+    padding: 1em 1.4em;
+    animation: fade-up 0.5s ease both;
+}
+
+.log::-webkit-scrollbar {
+    width: 8px;
+}
+
+.log::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 4px;
+}
+
+.log::-webkit-scrollbar-track {
+    background: transparent;
+}
+
 @keyframes fade-up {
     from {
         opacity: 0;
@@ -134,7 +231,10 @@ html, body {
 
 @media (prefers-reduced-motion: reduce) {
     .instructions,
-    .run-button {
+    .run-button,
+    .node-row,
+    .cluster-summary,
+    .log {
         animation: none;
     }
     .command::after {
