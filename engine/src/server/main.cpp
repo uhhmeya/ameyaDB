@@ -17,6 +17,7 @@
 #include "../headers/globals.h"
 #include "../headers/threads.h"
 
+
 int myNodeID;
 atomic<xnt> log_index{0};
 vector<atomic<int>> my_fd_to;
@@ -225,6 +226,9 @@ int main(int argc, char *argv[]) {
 
     myNodeID = stoi(argv[1]);
     string relay_ip = argv[2];
+
+    connect_to_CB();
+    get_and_update_life_count(myNodeID);
 
     constexpr int relay_port = 9000;
 

@@ -105,7 +105,6 @@ static void save_termVote() {
     fsync_parent_dir_or_die(RAFT_PATH);
 }
 
-
 static void put(string& b, const void* p, size_t n) {
     b.append(static_cast<const char*>(p), n);
 }
@@ -124,8 +123,6 @@ static string build_vote_request(xnt log_len, xnt last_term) {
 
 
 void election_timer_loop() {
-    Thr.set_type("election");        // otherwise every line logs with no type
-    print("spawned");
 
     while (true) {
         sleep_for(milliseconds(50));

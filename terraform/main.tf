@@ -24,10 +24,10 @@ resource "aws_internet_gateway" "geochron" {
 }
 
 resource "aws_subnet" "private" {
-  count             = 3
+  count             = 5
   vpc_id            = aws_vpc.geochron.id
   cidr_block        = "10.0.${count.index}.0/24"
-  availability_zone = "us-east-1${["a", "b", "c"][count.index]}"
+  availability_zone = "us-east-1${["a", "b", "c", "d", "f"][count.index]}"
   tags = { Name = "ameyaDB-private-${count.index}" }
 }
 
@@ -73,7 +73,7 @@ resource "aws_route_table_association" "public" {
 }
 
 resource "aws_route_table_association" "private" {
-  count          = 3
+  count          = 5
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private.id
 }
@@ -94,16 +94,11 @@ resource "aws_security_group" "db_nodes" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # Raft peer mesh: node i listens on 8080 + i (nodes 0-4 -> 8080-8084).
+  # All peer traffic (WRITE / READ / REQUEST_VOTE) is multiplexed over these.
   ingress {
     from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/16"]
-  }
-
-  ingress {
-    from_port   = 8081
-    to_port     = 8081
+    to_port     = 8084
     protocol    = "tcp"
     cidr_blocks = ["10.0.0.0/16"]
   }
@@ -130,100 +125,41 @@ resource "aws_iam_role" "db_node" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "s3_access" {
-  role       = aws_iam_role.db_node.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
-}
-
-resource "aws_iam_role_policy_attachment" "sqs_access" {
-  role       = aws_iam_role.db_node.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSQSFullAccess"
-}
-
-resource "aws_iam_role_policy_attachment" "sns_access" {
-  role       = aws_iam_role.db_node.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSNSFullAccess"
-}
-
 resource "aws_iam_instance_profile" "db_node" {
   name = "ameyaDB-node-profile"
   role = aws_iam_role.db_node.name
 }
 
-data "aws_caller_identity" "current" {}
-
-resource "aws_s3_bucket" "ameyaDB" {
-  bucket        = "ameyadb-storage-${data.aws_caller_identity.current.account_id}"
-  force_destroy = true
-  tags          = { Name = "ameyaDB-storage" }
-}
-
-resource "aws_sns_topic" "replication" {
-  name = "ameyaDB-replication"
-  tags = { Name = "ameyaDB-replication" }
-}
-
-resource "aws_sqs_queue" "replication" {
-  count                      = 3
-  name                       = "ameyaDB-replication-node-${count.index}"
-  visibility_timeout_seconds = 30
-  tags                       = { Name = "ameyaDB-replication-node-${count.index}" }
-}
-
-resource "aws_sqs_queue_policy" "replication" {
-  count     = 3
-  queue_url = aws_sqs_queue.replication[count.index].id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "sns.amazonaws.com" }
-      Action    = "sqs:SendMessage"
-      Resource  = aws_sqs_queue.replication[count.index].arn
-      Condition = {
-        ArnEquals = {
-          "aws:SourceArn" = aws_sns_topic.replication.arn
-        }
-      }
-    }]
-  })
-}
-
-resource "aws_sns_topic_subscription" "replication" {
-  count     = 3
-  topic_arn = aws_sns_topic.replication.arn
-  protocol  = "sqs"
-  endpoint  = aws_sqs_queue.replication[count.index].arn
-}
-
 # Persistent data volumes — survive EC2 termination for chaos testing
 resource "aws_ebs_volume" "db_node" {
-  count             = 3
-  availability_zone = "us-east-1${["a", "b", "c"][count.index]}"
+  count             = 5
+  availability_zone = "us-east-1${["a", "b", "c", "d", "f"][count.index]}"
   size              = 20
   type              = "gp3"
   tags = { Name = "ameyaDB-data-${count.index}" }
 }
 
 resource "aws_volume_attachment" "db_node" {
-  count       = 3
+  count       = 5
   device_name = "/dev/xvdf"
   volume_id   = aws_ebs_volume.db_node[count.index].id
   instance_id = aws_instance.db_node[count.index].id
 }
 
+variable "db_node_ami" {
+  type    = string
+  default = "ami-0479cba6c062ea44e"
+}
+
 resource "aws_instance" "db_node" {
-  count                  = 3
-  ami                    = "ami-0a527f352691073f2"
-  instance_type          = "t3.micro"
+  count                  = 5
+  ami                    = var.db_node_ami
+  instance_type          = "m7i.large"
   subnet_id              = aws_subnet.private[count.index].id
   key_name               = aws_key_pair.ameyaDB.key_name
   iam_instance_profile   = aws_iam_instance_profile.db_node.name
   vpc_security_group_ids = [aws_security_group.db_nodes.id]
 
-  # Mount persistent EBS volume at boot.
-  # blkid check ensures we only format on first-ever attach — not on reattach,
-  # so WAL and snapshots survive EC2 termination during chaos testing.
   user_data = <<-EOF
     #!/bin/bash
     if ! blkid /dev/xvdf; then
@@ -242,14 +178,6 @@ resource "aws_instance" "db_node" {
   tags = { Name = "ameyaDB-node-${count.index}" }
 }
 
-resource "aws_lb" "internal" {
-  name               = "ameyaDB-internal-nlb"
-  internal           = true
-  load_balancer_type = "network"
-  subnets            = aws_subnet.private[*].id
-  tags               = { Name = "ameyaDB-internal-nlb" }
-}
-
 resource "aws_route53_zone" "private" {
   name = "ameyadb.internal"
   vpc {
@@ -258,7 +186,7 @@ resource "aws_route53_zone" "private" {
 }
 
 resource "aws_route53_record" "db_node" {
-  count   = 3
+  count   = 5
   zone_id = aws_route53_zone.private.zone_id
   name    = "node-${count.index}.ameyadb.internal"
   type    = "A"
@@ -268,14 +196,6 @@ resource "aws_route53_record" "db_node" {
 
 output "node_ips" {
   value = aws_instance.db_node[*].private_ip
-}
-
-output "sns_topic_arn" {
-  value = aws_sns_topic.replication.arn
-}
-
-output "replication_queue_urls" {
-  value = aws_sqs_queue.replication[*].url
 }
 
 # Bastion

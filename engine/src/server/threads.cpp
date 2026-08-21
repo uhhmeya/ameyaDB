@@ -13,48 +13,48 @@
 #include <sys/timex.h>
 #include <clockbound.h>
 
-
 static mutex print_mutex;
 static mutex relay_mutex;
-
 
 static atomic<unsigned long long> msgs_sent_to_browser_count{0};
 static long long life_count = 0;
 
-static clockbound_ctx *CB_contex = nullptr;
+// reference to connection with CB
+// CB is how we get accurate time
+static clockbound_ctx *cb_ctx = nullptr;
 
-
-static string incarnation_path(int node_id) {
-    return "node" + to_string(node_id) + ".incarnation";
-}
-
-long long load_and_bump_incarnation(int node_id) {
-
-    const string path = "node" + to_string(node_id) + ".incarnation";
-
+// utils
+static long long read_life_count(const string &path) {
     long long cur = 0;
     if (FILE *f = fopen(path.c_str(), "r")) {
-        if (fscanf(f, "%lld", &cur) != 1) cur = 0;
+        if (fscanf(f, "%lld", &cur) != 1) {
+            print("[life] WARNING: " + path + " exists but could not be parsed; resetting to 0");
+            cur = 0;
+        }
         fclose(f);
+    } else {
+        print("[life] no " + path + " found (expected on first boot); starting at 0");
     }
-    const long long next = cur + 1;
-
+    return cur;
+}
+static void save_life_count(const string &path, long long value) {
     const string tmp = path + ".tmp";
     int fd = open(tmp.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (fd >= 0) {
-        const string s = to_string(next) + "\n";
-        ssize_t w = write(fd, s.c_str(), s.size());
-        (void) w;
-        fsync(fd);
-        close(fd);
-        if (rename(tmp.c_str(), path.c_str()) == 0) {
-            int dfd = open(".", O_RDONLY);
-            if (dfd >= 0) { fsync(dfd); close(dfd); }
-        }
+    if (fd < 0) {
+        print("[life] WARNING: could not open " + tmp + " for writing");
+        return;
     }
 
-    my_incarnation = next;
-    return next;
+    const string s = to_string(value) + "\n";
+    ssize_t w = write(fd, s.c_str(), s.size());
+    (void) w;
+    fsync(fd);
+    close(fd);
+
+    if (rename(tmp.c_str(), path.c_str()) == 0) {
+        int dfd = open(".", O_RDONLY);
+        if (dfd >= 0) { fsync(dfd); close(dfd); }
+    }
 }
 static long long phc_error_bound_us() {
     FILE *f = fopen("/sys/bus/pci/devices/0000:00:03.0/phc_error_bound", "r");
@@ -74,8 +74,18 @@ static long long kernel_error_bound_us() {
     return tx.maxerror >= 0 ? static_cast<long long>(tx.maxerror) : -1;
 }
 
-// Fills wall_us and err_us together so they always describe the same instant.
-static void sample_clock(long long &wall_us, long long &err_us) {
+long long get_and_update_life_count(int node_id) {
+
+    const string life_path = "n" + to_string(node_id) + "_.life";
+    const long long prev_life = read_life_count(life_path);
+    const long long this_life = prev_life + 1;
+
+    save_life_count(life_path, this_life);
+
+    life_count = this_life; // file scope variable
+    return this_life;
+}
+static void get_cur_time(long long &wall_us, long long &err_us) {
     if (cb_ctx) {
         clockbound_now_result now {};
         clockbound_err cb_err {};
@@ -91,27 +101,20 @@ static void sample_clock(long long &wall_us, long long &err_us) {
     }
 
     wall_us = chrono::duration_cast<microseconds>(system_clock::now().time_since_epoch()).count();
-
     err_us = phc_error_bound_us();
     if (err_us < 0) err_us = kernel_error_bound_us();
 }
 
-void init_stamping(int node_id) {
+static void connect_to_CB() {
     clockbound_err cb_err {};
     cb_ctx = clockbound_open(CLOCKBOUND_SHM_DEFAULT_PATH, &cb_err);
     if (!cb_ctx)
-        cerr << "[init_stamping] clockbound_open failed; falling back to "
+        cerr << "[connect_to_CB] clockbound_open failed; falling back to "
                 "sysfs/adjtimex error bounds\n";
-
-    load_and_bump_incarnation(node_id);
 }
-
 
 void print(const std::string &msg) {
 
-    // Deliberately unchanged. This is the human stream you tail in a terminal,
-    // so it stays readable local time. Only the relay wire format -- which is
-    // read by a machine -- carries the ordering fields.
     auto curTime = system_clock::now();
     auto curTime_ms = chrono::duration_cast<milliseconds>(curTime.time_since_epoch()) % 1000;
 
@@ -125,25 +128,25 @@ void print(const std::string &msg) {
          << setw(3) << setfill('0') << curTime_ms.count()
          << " (node " << myNodeID << ") (" << msg << ")\n";
 
-    lock_guard<mutex> lock(print_mutex);
+    lock_guard lock(print_mutex);
     cout << line.str() << flush;
 }
 
 
 void send_to_relay(int fd, const std::string &msg) {
 
-    const unsigned long long seq = node_seq.fetch_add(1, memory_order_relaxed);
+    const unsigned long long seq = msgs_sent_to_browser_count.fetch_add(1, memory_order_relaxed);
 
     long long wall_us = 0, err_us = -1;
-    sample_clock(wall_us, err_us);
+    get_cur_time(wall_us, err_us);
 
-    // <incarnation> <node_seq> <wall_us> <err_us> (node N) (msg)
+    // <life> <msg idx> <wall_us> <err_us> (node N) (msg)
     ostringstream line;
-    line << my_incarnation << ' ' << seq << ' ' << wall_us << ' ' << err_us
+    line << life_count << ' ' << seq << ' ' << wall_us << ' ' << err_us
          << " (node " << myNodeID << ") (" << msg << ")\n";
     const string out = line.str();
 
-    lock_guard<mutex> lock(relay_mutex);
+    lock_guard lock(relay_mutex);
     ssize_t w = write(fd, out.c_str(), out.size());
     (void) w;
 }
