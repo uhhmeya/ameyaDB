@@ -62,8 +62,13 @@ Parses KV to wire & sends it to walsnap
 4. click invalidate & restart
 
 # How to SSH into an ec2
-1. **ameyaDB %** ssh ec2-user@100.48.196.227
+1. **ameyaDB %** ssh ec2-user@XXX
 2. **bastion %** ssh ec2-user@node-0.ameyadb.internal
+
+# How to run relay on bastion
+1. **ameyaDB %** ssh bastion
+2. **bastion %** cd ameyaDB && git pull
+3. **bastion %** python3 relay.py
 
 # How to update AMI
 1. **ameyaDB %** which packer

@@ -17,7 +17,6 @@
 #include "../headers/globals.h"
 #include "../headers/threads.h"
 
-
 int myNodeID;
 atomic<xnt> log_index{0};
 vector<atomic<int>> my_fd_to;
@@ -276,6 +275,5 @@ int main(int argc, char *argv[]) {
             keep_peer_initiator_on_wire(peer);
         }).detach();
     }
-
     accept_4ever(listener);
 }

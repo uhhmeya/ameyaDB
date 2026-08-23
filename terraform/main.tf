@@ -207,9 +207,13 @@ output "node_ips" {
   value = aws_instance.db_node[*].private_ip
 }
 
-# Bastion
+variable "bastion_ami" {
+  type    = string
+  default = "ami-0aad848a3eba4e04b"
+}
+
 resource "aws_instance" "bastion" {
-  ami                         = "ami-0e10497160c48e829"
+  ami                         = var.bastion_ami
   instance_type               = "t3.micro"
   subnet_id                   = aws_subnet.public.id
   key_name                    = aws_key_pair.ameyaDB.key_name
