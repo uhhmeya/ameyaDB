@@ -62,7 +62,7 @@ Parses KV to wire & sends it to walsnap
 4. click invalidate & restart
 
 # How to SSH into an ec2
-1. **ameyaDB %** ssh bastion
+1. **ameyaDB %** ssh ec2-user@100.48.196.227
 2. **bastion %** ssh ec2-user@node-0.ameyadb.internal
 
 # How to update AMI
