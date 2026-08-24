@@ -112,6 +112,15 @@ resource "aws_security_group" "db_nodes" {
     cidr_blocks = ["10.0.0.0/16"]
   }
 
+  # Relay WS: your browser connects here from anywhere to watch the cluster.
+  # Open to the internet for now -- lock this down later (see notes).
+  ingress {
+    from_port   = 8765
+    to_port     = 8765
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -213,16 +222,21 @@ variable "bastion_ami" {
 }
 
 resource "aws_instance" "bastion" {
-  ami                         = var.bastion_ami
-  instance_type               = "t3.micro"
-  subnet_id                   = aws_subnet.public.id
-  key_name                    = aws_key_pair.ameyaDB.key_name
-  associate_public_ip_address = true
-  vpc_security_group_ids      = [aws_security_group.db_nodes.id]
+  ami                    = var.bastion_ami
+  instance_type          = "t3.micro"
+  subnet_id              = aws_subnet.public.id
+  key_name               = aws_key_pair.ameyaDB.key_name
+  vpc_security_group_ids = [aws_security_group.db_nodes.id]
 
   tags = { Name = "ameyaDB-bastion" }
 }
 
+resource "aws_eip" "bastion" {
+  domain   = "vpc"
+  instance = aws_instance.bastion.id
+  tags     = { Name = "ameyaDB-bastion-eip" }
+}
+
 output "bastion_ip" {
-  value = aws_instance.bastion.public_ip
+  value = aws_eip.bastion.public_ip
 }

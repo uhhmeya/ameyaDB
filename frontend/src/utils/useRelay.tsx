@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 
-const RELAY_URL = "ws://localhost:8765"
+const RELAY_URL = "ws://107.20.160.98:8765"
 const INITIAL_BACKOFF = 500
 const MAX_BACKOFF = 5000
 
