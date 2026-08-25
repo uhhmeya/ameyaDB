@@ -218,7 +218,7 @@ output "node_ips" {
 
 variable "bastion_ami" {
   type    = string
-  default = "ami-0aad848a3eba4e04b"
+  default = "ami-00bcfe7d433aa2c17"
 }
 
 resource "aws_instance" "bastion" {
@@ -235,6 +235,10 @@ resource "aws_eip" "bastion" {
   domain   = "vpc"
   instance = aws_instance.bastion.id
   tags     = { Name = "ameyaDB-bastion-eip" }
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 output "bastion_ip" {

@@ -3,8 +3,9 @@ import websockets
 import os
 import json
 from datetime import datetime
+import re
 
-# only ports from this computer can connect
+# any computer can connect
 TCP_HOST = "0.0.0.0"
 WS_HOST = "0.0.0.0"
 
@@ -19,6 +20,10 @@ WS_PORT = 8765
 # browser is not connected yet
 browser = None
 
+nodes = {}
+
+fd_parser = re.compile(r"\(node (\d+)\)")
+
 SLEEP_THRESHOLD = 60 # seconds
 
 def log(msg):
@@ -26,8 +31,6 @@ def log(msg):
 
 
 async def run_test():
-
-    # run test.py
     proc = await asyncio.create_subprocess_exec("python3", "test.py",)
     returncode = await proc.wait()
     log(f"test.py exited with code {returncode}")
@@ -42,13 +45,19 @@ async def send_to_browser(msg):
         print("FATAL: browser connection closed mid-send")
         os._exit(1)
 
+def parseFD(msg, writer):
+    m = fd_parser.search(msg)
+    if not m:
+        return None
+    node_id = int(m.group(1))
+    nodes[node_id] = writer
+    log(f"node{node_id} reachable")
+    return node_id
+
 # reader receives bytes from wire
 # writer sends bytes into wire
 async def on_TCP(reader, writer):
 
-    # node connected : (ip,port)
-    peer = writer.get_extra_info("peername")
-    print(f"node connected : {peer}")
     node_id = None
     try:
 
@@ -63,10 +72,17 @@ async def on_TCP(reader, writer):
             if not msg:
                 continue
 
+            # who are we talking to?
+            if node_id is None:
+                node_id = parseFD(msg, writer)
+
             await send_to_browser(msg)
 
+    # when tcp wire breaks
     finally:
-        print(f"TCP node disconnected: {peer}")
+        if node_id is not None:
+            del nodes[node_id]
+            log(f"node{node_id} unreachable")
         writer.close()
 
 # called when browser connects to relay

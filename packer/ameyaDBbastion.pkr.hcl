@@ -51,7 +51,7 @@ build {
     inline = [
       "set -eux",
       "sudo dnf update -y",
-      "sudo dnf install -y git python3 python3-pip",
+      "sudo dnf install -y git python3 python3-pip gcc-c++ make",
     ]
   }
 

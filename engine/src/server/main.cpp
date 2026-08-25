@@ -32,6 +32,10 @@ xnt load_snap();
 void replay_wal(xnt x);
 void attach_reader_to_tcp_wire(int peer_id);
 
+
+static const string RELAY_IP = "107.20.154.53";
+constexpr int RELAY_PORT = 9000;
+
 // utils
 static string link_id(int a, int b) {
     return to_string(min(a, b)) + "<--->" + to_string(max(a, b));
@@ -143,13 +147,34 @@ static int initiate_to_peer(int peer_id) {
     }
 }
 
+static bool handle_relay_msg(int fd, const string &msg) {
+    (void)fd;
+    (void)msg;
+    return true;
+}
+
+static void attach_reader_to_relay(int fd) {
+    string msg;
+    char c;
+    while (true) {
+        ssize_t n = read(fd, &c, 1);
+        if (n <= 0) return;          // relay wire broke
+        if (c == '\n') {
+            if (!handle_relay_msg(fd, msg)) return;
+            msg.clear();
+            continue;
+        }
+        msg += c;
+    }
+}
+
 // keeps connection between node & relay
 static void keep_relay_initiator_on_wire(string host, int port) {
     while (true) {
         int fd = initiate_to_relay(host, port);   // blocks until connected
         relay_fd = fd;
-        char buf[1];
-        read(fd, buf, sizeof(buf));   // blocks until relay wire breaks
+        send_to_relay(fd, "hello");
+        attach_reader_to_relay(fd); // blocks until relay wire breaks
         relay_fd = -1;
         close(fd);
     }
@@ -218,22 +243,19 @@ static void accept_4ever(int listener) {
 // (k v) (fn ln tlr) (i t CRC)
 int main(int argc, char *argv[]) {
 
-    if (argc != 3) {
-        cerr << "usage: " << argv[0] << " <nodeID> <relay_ip>\n";
+    if (argc != 2) {
+        cerr << "usage: " << argv[0] << " <nodeID>\n";
         return 1;
     }
 
     myNodeID = stoi(argv[1]);
-    string relay_ip = argv[2];
 
     connect_to_CB();
     get_and_update_life_count(myNodeID);
 
-    constexpr int relay_port = 9000;
-
     // spawn relay thread to connect node to relay
-    thread([relay_ip] {
-        keep_relay_initiator_on_wire(relay_ip, relay_port);
+    thread([] {
+        keep_relay_initiator_on_wire(RELAY_IP, RELAY_PORT);
     }).detach();
 
     // park main thread until connected to relay

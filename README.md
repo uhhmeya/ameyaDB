@@ -1,9 +1,23 @@
-# ameyaDB
+_# ameyaDB
 Stores Key-->Value pairs across 5 nodes. Each node is an EC2 in a different AZ. 
 Cluster agrees on order of writes applied via the RAFT consensus algorithm. 
 Incremental snapshotting + WAL log is used so that each node survives crash.
 Nodes forward messages to browser over a relay server that runs on your device.
 Browser displays behavior of cluster during various RAFT edge cases
+
+# High Level Overview
+Built & Tested WAL + incremental snapshot crash recovery mechanism to restore DB state after arbitrary crashes.
+Programmed coordinator-less TCP connection where nodes find peers in any boot order after arbitrary crashes.
+Invented amGPT, a tool for sending messages from nodes to a React frontend over a relay server to debug crash behavior across cluster
+Integrated AWS Clockbound with amGPT to let frontend re-construct true event order across nodes despite OS level clock drift, exposing silent network bugs
+Provisioned 5 node AWS cluster with Terraform with persistent EBS volumes, VPC networking, & per node DNS via Route 53
+
+# Technical Details
+Found race where kernel could reuse a file-descriptor(FD) that my process still thought was in use, fixed by changing which method closes the FD
+Found race where follower could ACK a dead leader which hits a closed socket which crashes the follower. Fixed by ignoring SIGPIPE.
+Handled the mid-flush crash data loss edge case by pouring writes into a temp file then atomically renaming it
+Found race where crash recovery could re-order writes. Fixed it by flushing to WAL and assigning log index under one lock.
+Found that if you grab dirty keys when building the snap and a crash occurs, then there's a race window where a write can be applied without the key being marked dirty. (data loss)
 
 # usage
 run `npm run dev` from `/ameyaDB/frontend`
@@ -82,17 +96,5 @@ Parses KV to wire & sends it to walsnap
 9. console output must show 5 instances + 5 volume attachments replaced + 0 ebs volumes
 10. **terraform %** terraform apply -var="db_node_ami=`ami-xxx`
 
-# Details
-1. Built crash recovery using WAL replay and incremental snapshots, tested to ensure durability across arbitrary crashes
-2. Buffered writes into temp files for WAL truncation and snapshot publishing to prevent unrecoverable EBS state on mid-flush crash
-3. Identified race condition allowing stale entries to overwrite newer ones on crash recovery ; Fixed it by flushing to WAL and assigning log index under one lock.
-4. Identified atomic grabbing of dirty keys during snapshot construction allows for data loss if a crash occurs between snapshot cycles ; Fixed by marking keys dirty under DB lock
-5. Implemented a cluster connection protocol over TCP wire where nodes discover peers in any boot order. No coordinator. Survives arbitrary crashes.
-6. Identified race condition where a follower's ACK to the leader can hit a broken wire if the leader died, crashing the follower via SIGPIPE.
-7. Replaced SIGPIPE with SIG\_IGN so the failed write returns safely instead of crashing the process.  This lets the connection tear down, and parks the follower with \textbf{surgical precision}.
-8. Built ThreadTracer, a tool that streams thread lifecycle events from each node through a relay server into a live React UI, surfacing TCP handshake and crash order to help debug silent network failures.
-9. Identified race condition where kernel can hand out a file descriptor(FD) that my process wrongly thinks is in use. Fixed by changing which method closes the FD
-10. Connected a Packer-built golden AMI to Terraform, replacing manual per-node dependency setup with one reproducible image shared across all 5 nodes.
-
-
-   
+# How to run script
+chmod +x dooby.sh && ./dooby.sh
