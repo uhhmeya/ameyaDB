@@ -90,7 +90,7 @@ async def on_WS(websocket):
     global browser
     browser = websocket
     conn_id = websocket.remote_address[1]
-    log(f"browser ({conn_id}) connected")
+    log(f"relay & browser are connected")
 
     try:
         async for raw in websocket:

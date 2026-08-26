@@ -12,6 +12,7 @@ SSH_RETRIES=10
 SSH_RETRY_DELAY=3
 
 cleanup() {
+    echo ""
     kill "$FRONTEND_PID" "$RELAY_PID" 2>/dev/null || true
     wait "$FRONTEND_PID" "$RELAY_PID" 2>/dev/null || true
     aws ec2 stop-instances --instance-ids $INSTANCE_IDS >/dev/null || true
@@ -20,11 +21,12 @@ cleanup() {
 }
 trap cleanup INT TERM
 
-# clear zombie relay
-ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new \
-    -i "$BASTION_KEY" "ec2-user@$BASTION_IP" \
-    "pkill -f relay.py" || true
-echo "cleared zombie relay on bastion"
+# clear zombie relay (if exists)
+if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new \
+        -i "$BASTION_KEY" "ec2-user@$BASTION_IP" \
+        "pkill -f relay.py" >/dev/null 2>&1; then
+    echo "cleared zombie relay on bastion"
+fi
 
 # start ec2s
 aws ec2 start-instances --instance-ids $INSTANCE_IDS >/dev/null
@@ -32,15 +34,16 @@ aws ec2 wait instance-running --instance-ids $INSTANCE_IDS
 echo "EC2s up"
 
 # start frontend
-(cd "$ROOT_DIR/frontend" && npm run dev) &
+(cd "$ROOT_DIR/frontend" && npm run dev >/dev/null 2>&1) &
 FRONTEND_PID=$!
-echo "frontend up ~ http://localhost:5173"
+echo "browser up ~ http://localhost:5173"
 
 # start relay
 for i in $(seq 1 $SSH_RETRIES); do
-    if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new \
+    if ssh -tt -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new \
             -i "$BASTION_KEY" "ec2-user@$BASTION_IP" \
-            "cd $BASTION_REPO_DIR && git pull && python3 relay.py"; then
+            "cd $BASTION_REPO_DIR && git pull --quiet && exec python3 relay.py" \
+            2>/dev/null; then
         break
     fi
     echo "relay ssh not ready yet, retrying ($i/$SSH_RETRIES)..."

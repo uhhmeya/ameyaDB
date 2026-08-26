@@ -6,11 +6,11 @@ Nodes forward messages to browser over a relay server that runs on your device.
 Browser displays behavior of cluster during various RAFT edge cases
 
 # High Level Overview
-Built & Tested WAL + incremental snapshot crash recovery mechanism to restore DB state after arbitrary crashes.
-Programmed coordinator-less TCP connection where nodes find peers in any boot order after arbitrary crashes.
-Invented amGPT, a tool for sending messages from nodes to a React frontend over a relay server to debug crash behavior across cluster
-Integrated AWS Clockbound with amGPT to let frontend re-construct true event order across nodes despite OS level clock drift, exposing silent network bugs
-Provisioned 5 node AWS cluster with Terraform with persistent EBS volumes, VPC networking, & per node DNS via Route 53
+1. Built & Tested WAL + incremental snapshot crash recovery mechanism to restore DB state after arbitrary crashes.
+2. Programmed coordinator-less TCP connection where nodes find peers in any boot order after arbitrary crashes.
+3. Invented amGPT, a tool for sending messages from nodes to a React frontend over a relay server to debug crash behavior across cluster.
+4. Integrated AWS Clockbound with amGPT to let frontend re-construct true event order across nodes despite OS level clock drift, exposing silent network bugs.
+5. Provisioned 5 node AWS cluster with Terraform with persistent EBS volumes, VPC networking, & per node DNS via Route 53.
 
 # Technical Details
 Found race where kernel could reuse a file-descriptor(FD) that my process still thought was in use, fixed by changing which method closes the FD
@@ -75,15 +75,6 @@ Parses KV to wire & sends it to walsnap
 3. click invalidate caches
 4. click invalidate & restart
 
-# How to SSH into an ec2
-1. **ameyaDB %** ssh ec2-user@XXX
-2. **bastion %** ssh ec2-user@node-0.ameyadb.internal
-
-# How to run relay on bastion
-1. **ameyaDB %** ssh bastion
-2. **bastion %** cd ameyaDB && git pull
-3. **bastion %** python3 relay.py
-
 # How to update AMI
 1. **ameyaDB %** which packer
 2. console output has to be `/opt/homebrew/bin/packer` 
@@ -98,3 +89,11 @@ Parses KV to wire & sends it to walsnap
 
 # How to run script
 chmod +x dooby.sh && ./dooby.sh
+
+# How to stop EC2s
+aws ec2 stop-instances --instance-ids i-0e6e669af96efd2b2 i-0ea00101be6dbf85e i-00e230837bd125239 i-01230f1eda1eb34cb 
+i-08625a93638fdff86 i-014ca2f3dc3ba70b5
+
+# How to start EC2s
+aws ec2 start-instances --instance-ids i-0e6e669af96efd2b2 i-0ea00101be6dbf85e i-00e230837bd125239 
+i-01230f1eda1eb34cb i-08625a93638fdff86 i-014ca2f3dc3ba70b5
