@@ -148,7 +148,7 @@ resource "aws_iam_instance_profile" "db_node" {
   role = aws_iam_role.db_node.name
 }
 
-# Persistent data volumes — survive EC2 termination for chaos testing
+# Persistent data volumes -- survive EC2 termination for chaos testing
 resource "aws_ebs_volume" "db_node" {
   count             = 5
   availability_zone = "us-east-1${["a", "b", "c", "d", "f"][count.index]}"
@@ -162,6 +162,10 @@ resource "aws_volume_attachment" "db_node" {
   device_name = "/dev/xvdf"
   volume_id   = aws_ebs_volume.db_node[count.index].id
   instance_id = aws_instance.db_node[count.index].id
+
+  # Never rip a mounted ext4 filesystem out from under a live instance.
+  # Only matters when you run `dooby.sh --fresh`, which replaces the nodes.
+  stop_instance_before_detaching = true
 }
 
 variable "db_node_ami" {
@@ -178,15 +182,92 @@ resource "aws_instance" "db_node" {
   iam_instance_profile   = aws_iam_instance_profile.db_node.name
   vpc_security_group_ids = [aws_security_group.db_nodes.id]
 
+  # NOTE: every line below is flush at column 0 on purpose. Terraform's <<-
+  # heredoc strips the SMALLEST indent found in the body, so a single flush
+  # line (like `cat > ...`) makes the strip amount 0 and leaves the shebang
+  # indented -- which stops cloud-init from recognising this as a script.
   user_data = <<-EOF
-    #!/bin/bash
-    if ! blkid /dev/xvdf; then
-      mkfs -t ext4 /dev/xvdf
-    fi
-    mkdir -p /var/log/ameyaDB
-    mount /dev/xvdf /var/log/ameyaDB
-    echo "/dev/xvdf /var/log/ameyaDB ext4 defaults,nofail 0 2" >> /etc/fstab
+#!/bin/bash
+set -x
+exec >> /var/log/user-data.log 2>&1
+
+# The EBS data volume is attached by a SEPARATE terraform resource, which
+# lands ~20s AFTER this instance boots. Wait for the device instead of
+# racing it. m7i is Nitro, so the kernel name is nvme1n1; /dev/xvdf only
+# exists if the AMI ships the ec2-utils udev rules.
+DEV=""
+for i in $(seq 1 60); do
+  for cand in /dev/xvdf /dev/sdf /dev/nvme1n1; do
+    if [ -b "$cand" ]; then DEV="$cand"; break 2; fi
+  done
+  sleep 2
+done
+if [ -z "$DEV" ]; then
+  echo "FATAL: data volume never appeared after 120s" >&2
+  exit 1
+fi
+
+if ! blkid "$DEV"; then
+  mkfs -t ext4 "$DEV"
+fi
+
+mkdir -p /var/log/ameyaDB
+mount "$DEV" /var/log/ameyaDB
+
+# fstab by UUID -- NVMe enumeration order is not stable across reboots.
+VOL_UUID=$(blkid -s UUID -o value "$DEV")
+if ! grep -q "$VOL_UUID" /etc/fstab; then
+  echo "UUID=$VOL_UUID /var/log/ameyaDB ext4 defaults,nofail 0 2" >> /etc/fstab
+fi
+
+mkdir -p /var/log/ameyaDB/server
+chown -R ec2-user:ec2-user /var/log/ameyaDB
+
+cat > /usr/local/bin/build_ameyaDB.sh << 'SCRIPT'
+#!/bin/bash
+set -e
+rm -rf /home/ec2-user/ameyaDB
+git clone --depth 1 https://github.com/uhhmeya/ameyaDB.git /home/ec2-user/ameyaDB
+mkdir -p /home/ec2-user/ameyaDB/engine/src/output/EXEC
+cd /home/ec2-user/ameyaDB/engine/src/server
+g++ -std=c++20 -o /home/ec2-user/ameyaDB/engine/src/output/EXEC/server main.cpp handlers.cpp walsnap.cpp threads.cpp -lclockbound
+SCRIPT
+chmod +x /usr/local/bin/build_ameyaDB.sh
+chown ec2-user:ec2-user /usr/local/bin/build_ameyaDB.sh
+
+cat > /etc/systemd/system/ameyaDB.service << 'UNIT'
+[Unit]
+Description=ameyaDB node
+After=network-online.target clockbound.service
+Wants=network-online.target
+Requires=clockbound.service
+# Refuse to start if the data volume did not mount, instead of silently
+# writing the WAL to the root disk (which dies with the instance).
+RequiresMountsFor=/var/log/ameyaDB
+# ExecStartPre does a full git clone. Without a rate limit, a failing build
+# re-clones GitHub every RestartSec forever and gets the host throttled.
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/var/log/ameyaDB/server
+ExecStartPre=/usr/local/bin/build_ameyaDB.sh
+ExecStart=/home/ec2-user/ameyaDB/engine/src/output/EXEC/server ${count.index}
+Restart=always
+RestartSec=15
+StartLimitInterval=300
+StartLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now ameyaDB.service
   EOF
+
+  # Re-run user_data if the script itself changes (only takes effect on the
+  # next replacement, but keeps the plan honest about drift).
+  user_data_replace_on_change = false
 
   root_block_device {
     volume_size = 20
@@ -216,6 +297,10 @@ output "node_ips" {
   value = aws_instance.db_node[*].private_ip
 }
 
+output "node_instance_ids" {
+  value = join(" ", aws_instance.db_node[*].id)
+}
+
 variable "bastion_ami" {
   type    = string
   default = "ami-00bcfe7d433aa2c17"
@@ -243,4 +328,10 @@ resource "aws_eip" "bastion" {
 
 output "bastion_ip" {
   value = aws_eip.bastion.public_ip
+}
+
+# dooby.sh needs this to start/stop the bastion. Without it the script has no
+# way to bring the bastion back, which is exactly how it ended up stranded.
+output "bastion_instance_id" {
+  value = aws_instance.bastion.id
 }

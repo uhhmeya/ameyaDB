@@ -51,7 +51,7 @@ def parseFD(msg, writer):
         return None
     node_id = int(m.group(1))
     nodes[node_id] = writer
-    log(f"node{node_id} reachable")
+    log(f"node{node_id} is idle and connected to relay")
     return node_id
 
 # reader receives bytes from wire

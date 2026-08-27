@@ -105,9 +105,13 @@ static void get_cur_time(long long &wall_us, long long &err_us) {
     if (err_us < 0) err_us = kernel_error_bound_us();
 }
 
-static void connect_to_CB() {
+// The clockbound build installed on this AMI declares
+//     clockbound_ctx* clockbound_open(clockbound_err *err);
+// i.e. one argument, no shm path -- the daemon's socket location is compiled
+// into the library. Passing CLOCKBOUND_SHM_DEFAULT_PATH is a newer API.
+void connect_to_CB() {
     clockbound_err cb_err {};
-    cb_ctx = clockbound_open(CLOCKBOUND_SHM_DEFAULT_PATH, &cb_err);
+    cb_ctx = clockbound_open(&cb_err);
     if (!cb_ctx)
         cerr << "[connect_to_CB] clockbound_open failed; falling back to "
                 "sysfs/adjtimex error bounds\n";

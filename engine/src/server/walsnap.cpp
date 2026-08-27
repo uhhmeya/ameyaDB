@@ -11,6 +11,7 @@
 #include <sstream>
 #include <cstdio>
 #include <random>
+#include <algorithm>   // std::find_if -- GCC 10's <ranges> lacks the range algorithms
 
 static const string SNAP_DIR_PATH = "../output/snaps/";
 static const string WAL_PATH      = "../output/wal.txt";
@@ -115,8 +116,8 @@ void truncate_wal(xnt snap_idx) {
     rename((WAL_PATH + string(".tmp")).c_str(), WAL_PATH.c_str());
     wal.close(); wal.open(WAL_PATH, ios::app);
 
-    // truncate log vector
-    auto cut = ranges::find_if(log_vector, [&](const entry& e){ return e.log_index > snap_idx; });
+    auto cut = std::find_if(log_vector.begin(), log_vector.end(),
+                            [&](const entry& e){ return e.log_index > snap_idx; });
     log_vector.erase(log_vector.begin(), cut);
     log_base = snap_idx;
 }

@@ -90,10 +90,18 @@ Parses KV to wire & sends it to walsnap
 # How to run script
 chmod +x dooby.sh && ./dooby.sh
 
-# How to stop EC2s
-aws ec2 stop-instances --instance-ids i-0e6e669af96efd2b2 i-0ea00101be6dbf85e i-00e230837bd125239 i-01230f1eda1eb34cb 
-i-08625a93638fdff86 i-014ca2f3dc3ba70b5
+# stop
+aws ec2 stop-instances --instance-ids i-0e6e669af96efd2b2 i-0d2fb919672b5efeb i-0a873ffbab7f17256 i-013f3267e26f8809f i-02612508c1c8612f6 i-05e23208c5b613fda
 
-# How to start EC2s
-aws ec2 start-instances --instance-ids i-0e6e669af96efd2b2 i-0ea00101be6dbf85e i-00e230837bd125239 
-i-01230f1eda1eb34cb i-08625a93638fdff86 i-014ca2f3dc3ba70b5
+# start
+aws ec2 start-instances --instance-ids i-0e6e669af96efd2b2 i-0d2fb919672b5efeb i-0a873ffbab7f17256 i-013f3267e26f8809f i-02612508c1c8612f6 i-05e23208c5b613fda
+
+# stop everything ameyaDB, whatever the IDs happen to be
+aws ec2 stop-instances --instance-ids $(aws ec2 describe-instances \
+--filters "Name=tag:Name,Values=ameyaDB-*" "Name=instance-state-name,Values=running" \
+--query 'Reservations[].Instances[].InstanceId' --output text)
+
+# start everything ameyaDB
+aws ec2 start-instances --instance-ids $(aws ec2 describe-instances \
+--filters "Name=tag:Name,Values=ameyaDB-*" "Name=instance-state-name,Values=stopped" \
+--query 'Reservations[].Instances[].InstanceId' --output text)

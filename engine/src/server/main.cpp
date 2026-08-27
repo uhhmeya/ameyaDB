@@ -22,6 +22,8 @@ atomic<xnt> log_index{0};
 vector<atomic<int>> my_fd_to;
 atomic<int> relay_fd{-1};
 
+atomic<bool> alive{false};
+
 // announce
 bool handle_write(int x);
 bool handle_read(int x);
@@ -149,7 +151,10 @@ static int initiate_to_peer(int peer_id) {
 
 static bool handle_relay_msg(int fd, const string &msg) {
     (void)fd;
-    (void)msg;
+    if (msg == "wake") {
+        alive = true;
+        cout << "node " << myNodeID << " is alive\n";
+    }
     return true;
 }
 
@@ -253,14 +258,19 @@ int main(int argc, char *argv[]) {
     connect_to_CB();
     get_and_update_life_count(myNodeID);
 
-    // spawn relay thread to connect node to relay
+    // connect to relay
     thread([] {
         keep_relay_initiator_on_wire(RELAY_IP, RELAY_PORT);
     }).detach();
 
-    // park main thread until connected to relay
+    // wait until connected to relay
     while (relay_fd.load() == -1)
         sleep_for(milliseconds(50));
+
+    cout << "node is playing dead\n";
+
+    while (!alive.load())
+        sleep_for(seconds(2));
 
     // my_fd_to = (-1,-1,-1,-1,-1)
     my_fd_to = vector<atomic<int>>(NUM_NODES);
