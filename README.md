@@ -105,3 +105,7 @@ aws ec2 stop-instances --instance-ids $(aws ec2 describe-instances \
 aws ec2 start-instances --instance-ids $(aws ec2 describe-instances \
 --filters "Name=tag:Name,Values=ameyaDB-*" "Name=instance-state-name,Values=stopped" \
 --query 'Reservations[].Instances[].InstanceId' --output text)
+
+
+# ips
+10.0.0.64, 10.0.1.61, 10.0.2.115, 10.0.3.65, 10.0.4.103

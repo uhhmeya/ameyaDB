@@ -11,7 +11,13 @@
 #include <sstream>
 #include <unistd.h>
 #include <sys/timex.h>
+// libclockbound exports plain C symbols, but /usr/include/clockbound.h has no
+// `#ifdef __cplusplus / extern "C"` guard of its own. Without this wrapper the
+// C++ compiler mangles the names (clockbound_open(clockbound_err*)) and the
+// linker cannot match them against the unmangled symbols in the .so.
+extern "C" {
 #include <clockbound.h>
+}
 
 static mutex print_mutex;
 static mutex relay_mutex;

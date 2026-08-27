@@ -230,6 +230,7 @@ rm -rf /home/ec2-user/ameyaDB
 git clone --depth 1 https://github.com/uhhmeya/ameyaDB.git /home/ec2-user/ameyaDB
 mkdir -p /home/ec2-user/ameyaDB/engine/src/output/EXEC
 cd /home/ec2-user/ameyaDB/engine/src/server
+g++ -std=c++20 -pthread -o /home/ec2-user/ameyaDB/engine/src/output/EXEC/server main.cpp handlers.cpp walsnap.cpp threads.cpp -lclockbound
 g++ -std=c++20 -o /home/ec2-user/ameyaDB/engine/src/output/EXEC/server main.cpp handlers.cpp walsnap.cpp threads.cpp -lclockbound
 SCRIPT
 chmod +x /usr/local/bin/build_ameyaDB.sh
