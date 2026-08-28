@@ -4,6 +4,8 @@ const RELAY_URL = "ws://107.20.154.53:8765"
 const INITIAL_BACKOFF = 500
 const MAX_BACKOFF = 5000
 
+export const NUM_NODES = 5
+
 export function useRelay() {
     const wsRef = useRef<WebSocket | null>(null)
     const backoffRef = useRef(INITIAL_BACKOFF)
@@ -11,6 +13,7 @@ export function useRelay() {
     const cancelledRef = useRef(false)
     const [connected, setConnected] = useState(false)
     const [messages, setMessages] = useState<string[]>([])
+    const [roster, setRoster] = useState<number[]>([])
 
     // tries to connect to relay on mount
     useEffect(() => {
@@ -29,8 +32,17 @@ export function useRelay() {
             setConnected(true)
         }
 
-        // a node logged something -- relay forwarded it here
         ws.onmessage = (event) => {
+            // control frames from the relay itself are JSON --
+            // node log lines are plain text and fall through to the log
+            try {
+                const data = JSON.parse(event.data)
+                if (data && typeof data === 'object' && data.type === 'roster') {
+                    setRoster(data.nodes)
+                    return
+                }
+            } catch { /* not JSON -- a node logged something */ }
+
             setMessages(prev => [...prev, event.data])
         }
 
@@ -40,6 +52,7 @@ export function useRelay() {
             if (wsRef.current !== ws) return
 
             setConnected(false)
+            setRoster([])
             if (cancelledRef.current) return
             timeoutRef.current = setTimeout(connect_to_relay, backoffRef.current)
             backoffRef.current = Math.min(backoffRef.current * 2, MAX_BACKOFF)
@@ -59,5 +72,5 @@ export function useRelay() {
         }
     }, [])
 
-    return { connected, messages, send_msg }
+    return { connected, messages, roster, send_msg }
 }

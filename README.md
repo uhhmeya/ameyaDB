@@ -10,6 +10,7 @@ Browser displays behavior of cluster during various RAFT edge cases
 2. Programmed coordinator-less TCP connection where nodes find peers in any boot order after arbitrary crashes.
 3. Invented amGPT, a tool for sending messages from nodes to a React frontend over a relay server to debug crash behavior across cluster.
 5. Provisioned 5 node AWS cluster with Terraform with persistent EBS volumes, VPC networking, & per node DNS via Route 53.
+6. Added tool that lets browser terminate node, control who the node connects to, & control when node comes back up.
 
 # Technical Details
 Found race where kernel could reuse a file-descriptor(FD) that my process still thought was in use, fixed by changing which method closes the FD
