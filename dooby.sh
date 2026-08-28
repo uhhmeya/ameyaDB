@@ -85,7 +85,7 @@ BASTION_IP="$(tf_out bastion_ip)"
 echo "starting frontend..."
 ( cd "$ROOT_DIR/frontend" && exec npm run dev >/dev/null 2>&1 ) &
 FRONTEND_PID=$!
-echo "(http://localhost:5173) open this link then type ctrlA in console"
+echo "open this link to continue : http://localhost:5173"
 
 # order matters: relay.py keeps port 9000 closed until the browser attaches,
 # and nodes only start after that — a node can never reach a browserless relay.

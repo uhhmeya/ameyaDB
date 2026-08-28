@@ -9,7 +9,6 @@ Browser displays behavior of cluster during various RAFT edge cases
 1. Built & Tested WAL + incremental snapshot crash recovery mechanism to restore DB state after arbitrary crashes.
 2. Programmed coordinator-less TCP connection where nodes find peers in any boot order after arbitrary crashes.
 3. Invented amGPT, a tool for sending messages from nodes to a React frontend over a relay server to debug crash behavior across cluster.
-4. Integrated AWS Clockbound with amGPT to let frontend re-construct true event order across nodes despite OS level clock drift, exposing silent network bugs.
 5. Provisioned 5 node AWS cluster with Terraform with persistent EBS volumes, VPC networking, & per node DNS via Route 53.
 
 # Technical Details
@@ -20,8 +19,9 @@ Found race where crash recovery could re-order writes. Fixed it by flushing to W
 Found that if you grab dirty keys when building the snap and a crash occurs, then there's a race window where a write can be applied without the key being marked dirty. (data loss)
 
 # usage
-run `npm run dev` from `/ameyaDB/frontend`
-run `python3 test.py` from `/ameyaDB`
+1. download project & cd to it
+2. ameyaDB % chmod +x dooby.sh && ./dooby.sh
+3. that's it :)
 
 # main.cpp
 "Putting X on wire" means X is a thread that is reading bytes from wire
