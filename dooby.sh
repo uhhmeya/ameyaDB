@@ -85,14 +85,19 @@ BASTION_IP="$(tf_out bastion_ip)"
 echo "starting frontend..."
 ( cd "$ROOT_DIR/frontend" && exec npm run dev >/dev/null 2>&1 ) &
 FRONTEND_PID=$!
-echo "open this link to continue : http://localhost:5173"
+echo "(http://localhost:5173) open this link then type ctrlA in console"
 
 # order matters: relay.py keeps port 9000 closed until the browser attaches,
 # and nodes only start after that — a node can never reach a browserless relay.
 echo "starting relay..."
 settle $BASTION_ID
+BASTION_STATE="$(aws ec2 describe-instances --instance-ids $BASTION_ID \
+  --query 'Reservations[].Instances[].State.Name' --output text)"
+[[ "$BASTION_STATE" != "running" ]] && echo "(bastion was stopped — cold boot takes a couple minutes)"
 aws ec2 start-instances --instance-ids $BASTION_ID >/dev/null || fail "start-instances (bastion) failed"
-aws ec2 wait instance-status-ok --instance-ids $BASTION_ID || fail "bastion never became healthy"
+# instance-running + the ssh retry loop below is enough for the bastion --
+# waiting for full status checks would add minutes for nothing
+aws ec2 wait instance-running --instance-ids $BASTION_ID || fail "bastion never started"
 for i in $(seq 1 40); do
   ssh_bastion true 2>/dev/null && break
   [[ "$i" == 40 ]] && { ssh_bastion true; fail "bastion sshd never came up"; }
