@@ -105,11 +105,14 @@ async def on_WS(websocket):
 
 async def main():
 
-    # calls on_TCP() everytime node connects to relay
-    tcp_server = await asyncio.start_server(on_TCP, TCP_HOST, TCP_PORT)
-
-    # calls on_WS when browser connects to relay
+    # port 9000 stays closed until the browser is attached --
+    # a node can never say hello to a relay that has no browser
     async with websockets.serve(on_WS, WS_HOST, WS_PORT):
+        while browser is None:
+            await asyncio.sleep(0.2)
+
+        # calls on_TCP() everytime node connects to relay
+        tcp_server = await asyncio.start_server(on_TCP, TCP_HOST, TCP_PORT)
         async with tcp_server:
             await tcp_server.serve_forever()
 
