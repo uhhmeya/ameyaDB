@@ -116,6 +116,16 @@ echo "    bastion : $BASTION_ID @ $BASTION_IP"
 
 # ------------------------------------------------------------------ startup --
 
+# Let any instances still stopping (from a previous Ctrl-C) finish first --
+# start-instances rejects instances in transitional states.
+SETTLING="$(aws ec2 describe-instances --instance-ids $BASTION_ID $NODE_IDS \
+  --query 'Reservations[].Instances[?State.Name==`stopping`].InstanceId' \
+  --output text | xargs)"
+if [[ -n "$SETTLING" ]]; then
+  say "waiting for stopping instances to settle: $SETTLING"
+  aws ec2 wait instance-stopped --instance-ids $SETTLING
+fi
+
 say "starting instances"
 # start-instances is a no-op on already-running instances, so this is safe.
 if ! aws ec2 start-instances --instance-ids $BASTION_ID $NODE_IDS >/dev/null; then

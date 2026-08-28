@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom'
 
 const COOLDOWN_MS = 10_000
 
-type RunProps = {
+interface RunProps {
     connected: boolean
     send_msg: (data: unknown) => void
+    messages: string[]
 }
 
 function Run({ connected, send_msg }: RunProps) {

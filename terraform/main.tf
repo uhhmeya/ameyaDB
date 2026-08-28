@@ -223,6 +223,40 @@ fi
 mkdir -p /var/log/ameyaDB/server
 chown -R ec2-user:ec2-user /var/log/ameyaDB
 
+# ---- time stack repair (all three are Amazon Linux 2 version skew) ----
+
+# 1. chrony.conf points at the PTP hardware clock, but AL2's ENA driver has no
+#    PTP support so /dev/ptp_ena never appears -- and chronyd treats that as
+#    FATAL. Dead chronyd took clockbound down, which took ameyaDB down.
+if [ ! -e /dev/ptp_ena ]; then
+  sed -i 's|^refclock PHC|#refclock PHC|' /etc/chrony.conf
+  if ! grep -q '169.254.169.123' /etc/chrony.conf; then
+    echo 'server 169.254.169.123 prefer iburst minpoll 4 maxpoll 4' >> /etc/chrony.conf
+  fi
+  systemctl restart chronyd
+fi
+
+# 2. The clockbound unit baked into this AMI passes --ip, which ClockBound 1.x
+#    removed when it moved from a UDP socket to shared memory (exit 2).
+mkdir -p /var/log/clockbound
+sed -i 's|^ExecStart=.*|ExecStart=/usr/bin/clockbound|' /etc/systemd/system/clockbound.service
+systemctl daemon-reload
+
+# 3. ClockBound 1.x enables VMClock on every non-metal EC2 instance and panics
+#    (exit 101) when /dev/vmclock0 is missing. That device needs the
+#    ptp_vmclock driver, absent from AL2's 4.14 kernel. `disable` alone is NOT
+#    enough: ameyaDB's Wants= re-triggers a start whenever ameyaDB starts, and
+#    clockbound's own Restart=on-failure then panic-loops it every 2s forever.
+#    A start condition parks it quietly instead -- a failed condition is not a
+#    unit failure, so no restart loop -- and it lights up automatically on an
+#    AL2023 rebuild where the device exists. ameyaDB falls back to adjtimex
+#    bounds either way.
+if ! grep -q 'ConditionPathExists=/dev/vmclock0' /etc/systemd/system/clockbound.service; then
+  sed -i '/^\[Unit\]/a ConditionPathExists=/dev/vmclock0' /etc/systemd/system/clockbound.service
+fi
+systemctl daemon-reload
+systemctl enable --now clockbound.service || true
+
 cat > /usr/local/bin/build_ameyaDB.sh << 'SCRIPT'
 #!/bin/bash
 set -e
@@ -231,7 +265,6 @@ git clone --depth 1 https://github.com/uhhmeya/ameyaDB.git /home/ec2-user/ameyaD
 mkdir -p /home/ec2-user/ameyaDB/engine/src/output/EXEC
 cd /home/ec2-user/ameyaDB/engine/src/server
 g++ -std=c++20 -pthread -o /home/ec2-user/ameyaDB/engine/src/output/EXEC/server main.cpp handlers.cpp walsnap.cpp threads.cpp -lclockbound
-g++ -std=c++20 -o /home/ec2-user/ameyaDB/engine/src/output/EXEC/server main.cpp handlers.cpp walsnap.cpp threads.cpp -lclockbound
 SCRIPT
 chmod +x /usr/local/bin/build_ameyaDB.sh
 chown ec2-user:ec2-user /usr/local/bin/build_ameyaDB.sh
@@ -241,14 +274,23 @@ cat > /etc/systemd/system/ameyaDB.service << 'UNIT'
 Description=ameyaDB node
 After=network-online.target clockbound.service
 Wants=network-online.target
-Requires=clockbound.service
+# Wants=, NOT Requires=. Requires= propagates STOPS: every time clockbound
+# hit its failed state systemd tore this service down with it, which is what
+# the restart storm actually was. The server degrades to adjtimex bounds on
+# its own when clockbound is absent.
+Wants=clockbound.service
 # Refuse to start if the data volume did not mount, instead of silently
 # writing the WAL to the root disk (which dies with the instance).
 RequiresMountsFor=/var/log/ameyaDB
-# ExecStartPre does a full git clone. Without a rate limit, a failing build
-# re-clones GitHub every RestartSec forever and gets the host throttled.
 
 [Service]
+# ExecStartPre does a full git clone. Without a rate limit, a failing build
+# re-clones GitHub every RestartSec forever and gets the host throttled.
+# systemd 219 (Amazon Linux 2) spells this StartLimitInterval and wants it
+# in [Service]; StartLimitIntervalSec in [Unit] is a systemd 230+ name and
+# is silently ignored here.
+StartLimitInterval=300
+StartLimitBurst=5
 Type=simple
 User=ec2-user
 WorkingDirectory=/var/log/ameyaDB/server
@@ -256,8 +298,6 @@ ExecStartPre=/usr/local/bin/build_ameyaDB.sh
 ExecStart=/home/ec2-user/ameyaDB/engine/src/output/EXEC/server ${count.index}
 Restart=always
 RestartSec=15
-StartLimitInterval=300
-StartLimitBurst=5
 
 [Install]
 WantedBy=multi-user.target
