@@ -18,7 +18,7 @@ function Landing({ connected }: LandingProps) {
             <div className="instructions">
                 <p className="command">
                     <span className="prompt">ameyaDB %</span>
-                    <span> python3 relay.py</span>
+                    <span> chmod +x dooby.sh && ./dooby.sh </span>
                 </p>
                 <p className="hint">Run this to visualize</p>
             </div>

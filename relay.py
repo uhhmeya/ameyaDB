@@ -17,11 +17,17 @@ TCP_PORT = 9000
 # socket is built over port 8765
 WS_PORT = 8765
 
+NUM_NODES = 5
+
 # browser is not connected yet
 browser = None
 
 # node_id -> TCP writer, so the relay can talk BACK to a node later (wake / die)
 nodes = {}
+
+# flips true the first time all nodes are born dead together, then stays true --
+# the sanity check is a startup gate, not a live availability meter
+been_full = False
 
 # node_id -> how many times it has said hello (its rebirth generation)
 hellos = {}
@@ -47,17 +53,19 @@ async def run_test():
 
 async def send_to_browser(msg):
     if browser is None:
-        print(f"FATAL: No browser connected relay dropped msg : {msg}")
+        log(f"FATAL: No browser connected relay dropped msg : {msg}")
         os._exit(1)
     try:
         await browser.send(msg)
     except websockets.exceptions.ConnectionClosed:
-        print("FATAL: browser connection closed mid-send")
+        log("FATAL: browser connection closed mid-send")
         os._exit(1)
 
 # tells the browser which nodes are currently connected (== born dead until woken)
 async def send_roster():
-    await send_to_browser(json.dumps({"type": "roster", "nodes": sorted(nodes.keys())}))
+    global been_full
+    been_full = been_full or len(nodes) == NUM_NODES
+    await send_to_browser(json.dumps({"type": "roster", "nodes": sorted(nodes.keys()), "ready": been_full}))
 
 # a node just went down -- if it is not born dead again in time, scream.
 # `seen` pins the rebirth generation at the moment of death, so a node that
@@ -65,7 +73,7 @@ async def send_roster():
 async def expect_rebirth(node_id, seen):
     await asyncio.sleep(REBIRTH_DEADLINE)
     if node_id not in nodes and hellos.get(node_id, 0) == seen:
-        print(f"FATAL: node{node_id} was not born dead again within {REBIRTH_DEADLINE}s")
+        log(f"FATAL: node{node_id} was not born dead again within {REBIRTH_DEADLINE}s")
         os._exit(1)
 
 def parseFD(msg, writer):
@@ -106,9 +114,7 @@ async def on_TCP(reader, writer):
 
     # when tcp wire breaks
     finally:
-        # only forget the node if this wire is still the one on record --
-        # a reborn node may have registered a fresh wire before the old one
-        # timed out (same idea as compare_exchange_strong(stale, -1) in main.cpp)
+        # tell browser all nodes connected
         if node_id is not None and nodes.get(node_id) is writer:
             del nodes[node_id]
             log(f"node{node_id} unreachable")
@@ -139,8 +145,7 @@ async def on_WS(websocket):
 
 async def main():
 
-    # port 9000 stays closed until the browser is attached --
-    # a node can never say hello to a relay that has no browser
+    # browser must connect to relay first
     async with websockets.serve(on_WS, WS_HOST, WS_PORT):
         while browser is None:
             await asyncio.sleep(0.2)

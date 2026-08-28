@@ -14,6 +14,7 @@ export function useRelay() {
     const [connected, setConnected] = useState(false)
     const [messages, setMessages] = useState<string[]>([])
     const [roster, setRoster] = useState<number[]>([])
+    const [ready, setReady] = useState(false)
 
     // tries to connect to relay on mount
     useEffect(() => {
@@ -39,6 +40,9 @@ export function useRelay() {
                 const data = JSON.parse(event.data)
                 if (data && typeof data === 'object' && data.type === 'roster') {
                     setRoster(data.nodes)
+                    // relay latches this true once all nodes have been seen --
+                    // the sanity check only applies at first
+                    setReady(data.ready)
                     return
                 }
             } catch { /* not JSON -- a node logged something */ }
@@ -53,6 +57,7 @@ export function useRelay() {
 
             setConnected(false)
             setRoster([])
+            setReady(false)   // a new relay session must pass the gate again
             if (cancelledRef.current) return
             timeoutRef.current = setTimeout(connect_to_relay, backoffRef.current)
             backoffRef.current = Math.min(backoffRef.current * 2, MAX_BACKOFF)
@@ -72,5 +77,5 @@ export function useRelay() {
         }
     }, [])
 
-    return { connected, messages, roster, send_msg }
+    return { connected, messages, roster, ready, send_msg }
 }

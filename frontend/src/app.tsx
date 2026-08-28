@@ -5,7 +5,7 @@ import Run from './pages/run.tsx'
 import Debug from './pages/debug.tsx'
 
 function App() {
-    const { connected, messages, roster, send_msg } = useRelay()
+    const { connected, messages, roster, ready, send_msg } = useRelay()
 
     return (
         <BrowserRouter>
@@ -14,7 +14,8 @@ function App() {
                 <Route path="/run" element={<Run connected={connected}
                                                  send_msg={send_msg}
                                                  messages={messages}
-                                                 roster={roster} />} />
+                                                 roster={roster}
+                                                 ready={ready} />} />
                 <Route path="/debug" element={<Debug messages={messages} />} />
             </Routes>
         </BrowserRouter>

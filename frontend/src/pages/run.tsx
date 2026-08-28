@@ -9,9 +9,10 @@ interface RunProps {
     send_msg: (data: unknown) => void
     messages: string[]
     roster: number[]
+    ready: boolean
 }
 
-function Run({ connected, send_msg, roster }: RunProps) {
+function Run({ connected, send_msg, roster, ready }: RunProps) {
     const navigate = useNavigate()
     const [remaining, setRemaining] = useState(0)
     const next_allowed = useRef(0)
@@ -53,10 +54,8 @@ function Run({ connected, send_msg, roster }: RunProps) {
         wait(COOLDOWN_MS, () => navigate('/debug'))
     }
 
-    // the run button only exists when every node has said hello to the relay,
-    // i.e. all 5 are born dead and waiting
-    const ready = roster.length === NUM_NODES
-
+    // startup gate only: `ready` latches true (relay-side) the first time all
+    // nodes are born dead together, and stays true while nodes die mid-test
     const locked = remaining > 0
     return (
         <div className="fullscreen">
