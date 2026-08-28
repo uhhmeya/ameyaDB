@@ -4,6 +4,11 @@
 #   ./dooby.sh --fresh   terraform-replace all 5 nodes (slow, clean slate)
 set -uo pipefail
 
+# the whole script lives in one { } group so bash parses the entire file up
+# front -- saving/replacing this file while a run is live can then never
+# corrupt the running instance (bash otherwise streams scripts from disk)
+{
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TF_DIR="$ROOT_DIR/terraform"
 KEY="$HOME/.ssh/ameyaDB"
@@ -85,7 +90,7 @@ BASTION_IP="$(tf_out bastion_ip)"
 echo "starting frontend..."
 ( cd "$ROOT_DIR/frontend" && exec npm run dev >/dev/null 2>&1 ) &
 FRONTEND_PID=$!
-echo "(http://localhost:5173) open this link then type ctrlA in console"
+echo "open this link to continue : http://localhost:5173"
 
 # order matters: relay.py keeps port 9000 closed until the browser attaches,
 # and nodes only start after that — a node can never reach a browserless relay.
@@ -121,7 +126,7 @@ echo "starting nodes..."
 settle $NODE_IDS
 aws ec2 start-instances --instance-ids $NODE_IDS >/dev/null \
   || fail "start-instances (nodes) failed — VcpuLimitExceeded means vCPU quota is too low"
-IPS="$(terraform -chdir="$TF_DIR" output -json node_ips 2>/dev/null | tr -d '[]",' | xargs)"
+IPS="$(terraform -chdir="$TF_DIR" output -json node_ips 2>/dev/null | tr -d '[]"' | tr ',' ' ' | xargs)"
 [[ -z "$IPS" ]] && IPS="$(aws ec2 describe-instances --instance-ids $NODE_IDS \
   --query 'Reservations[].Instances[].PrivateIpAddress' --output text | xargs)"
 echo "node_ips = $IPS"
@@ -129,3 +134,5 @@ aws ec2 wait instance-status-ok --instance-ids $NODE_IDS || fail "one or more no
 
 while kill -0 "$FRONTEND_PID" 2>/dev/null || kill -0 "$RELAY_PID" 2>/dev/null; do sleep 1; done
 cleanup
+
+}

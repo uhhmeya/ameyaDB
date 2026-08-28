@@ -40,7 +40,7 @@ SLEEP_THRESHOLD = 60 # seconds
 # nodes coming back at a proper time. NOTE: today systemd re-clones + rebuilds
 # on every restart (RestartSec=15 + ExecStartPre build), so rebirth is slow --
 # tune this to what you actually measure.
-REBIRTH_DEADLINE = 120 # seconds
+REBIRTH_DEADLINE = 15 # seconds
 
 def log(msg):
     print(f"{datetime.now().strftime('%H:%M:%S')} {msg}")

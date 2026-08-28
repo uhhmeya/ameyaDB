@@ -269,41 +269,62 @@ SCRIPT
 chmod +x /usr/local/bin/build_ameyaDB.sh
 chown ec2-user:ec2-user /usr/local/bin/build_ameyaDB.sh
 
+# Build ONCE per boot (oneshot), not on every restart. Splitting build from
+# run is what makes rebirth fast: a chaos-test crash now relaunches the
+# existing binary in ~1-2s instead of re-cloning GitHub + recompiling for a
+# minute-plus. New code still lands naturally: every dooby stop/start cycle
+# is a fresh boot, and a fresh boot reruns this unit.
+cat > /etc/systemd/system/ameyaDB-build.service << 'UNIT'
+[Unit]
+Description=ameyaDB build (once per boot)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/build_ameyaDB.sh
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
 cat > /etc/systemd/system/ameyaDB.service << 'UNIT'
 [Unit]
 Description=ameyaDB node
-After=network-online.target clockbound.service
+After=network-online.target clockbound.service ameyaDB-build.service
 Wants=network-online.target
 # Wants=, NOT Requires=. Requires= propagates STOPS: every time clockbound
 # hit its failed state systemd tore this service down with it, which is what
 # the restart storm actually was. The server degrades to adjtimex bounds on
 # its own when clockbound is absent.
 Wants=clockbound.service
+# The build is different: it IS a hard dependency (there is no binary without
+# it), and a oneshot with RemainAfterExit never "stops" after success, so
+# Requires= cannot propagate a stop here. If the build fails, this service
+# correctly refuses to start instead of crash-looping on a missing binary.
+Requires=ameyaDB-build.service
 # Refuse to start if the data volume did not mount, instead of silently
 # writing the WAL to the root disk (which dies with the instance).
 RequiresMountsFor=/var/log/ameyaDB
+# Crashing on purpose is this service's job during chaos tests. Never let
+# systemd park it as "failed" for restarting too often. (AL2023's systemd is
+# modern, so the [Unit] StartLimitIntervalSec spelling is the right one now.)
+StartLimitIntervalSec=0
 
 [Service]
-# ExecStartPre does a full git clone. Without a rate limit, a failing build
-# re-clones GitHub every RestartSec forever and gets the host throttled.
-# systemd 219 (Amazon Linux 2) spells this StartLimitInterval and wants it
-# in [Service]; StartLimitIntervalSec in [Unit] is a systemd 230+ name and
-# is silently ignored here.
-StartLimitInterval=300
-StartLimitBurst=5
 Type=simple
 User=ec2-user
 WorkingDirectory=/var/log/ameyaDB/server
-ExecStartPre=/usr/local/bin/build_ameyaDB.sh
 ExecStart=/home/ec2-user/ameyaDB/engine/src/output/EXEC/server ${count.index}
 Restart=always
-RestartSec=15
+RestartSec=1
 
 [Install]
 WantedBy=multi-user.target
 UNIT
 systemctl daemon-reload
-systemctl enable --now ameyaDB.service
+systemctl enable --now ameyaDB-build.service ameyaDB.service
   EOF
 
   # Re-run user_data if the script itself changes (only takes effect on the
