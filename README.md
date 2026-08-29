@@ -91,6 +91,9 @@ Parses KV to wire & sends it to walsnap
 # How to run script
 chmod +x dooby.sh && ./dooby.sh
 
+# Run this when you're done working
+aws ec2 stop-instances --instance-ids i-0e6e669af96efd2b2
+
 
 
 

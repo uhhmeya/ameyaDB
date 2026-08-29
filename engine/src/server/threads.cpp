@@ -142,18 +142,50 @@ void print(const std::string &msg) {
     cout << line.str() << flush;
 }
 
+static string json_escape(const string &s) {
+    string out;
+    out.reserve(s.size() + 8);
+    for (unsigned char c : s) {
+        switch (c) {
+            case '"':  out += "\\\""; break;
+            case '\\': out += "\\\\"; break;
+            case '\n': out += "\\n";  break;
+            case '\r': out += "\\r";  break;
+            case '\t': out += "\\t";  break;
+            default:
+                if (c < 0x20) {
+                    char buf[7];
+                    snprintf(buf, sizeof(buf), "\\u%04x", c);
+                    out += buf;
+                } else {
+                    out += static_cast<char>(c);
+                }
+        }
+    }
+    return out;
+}
 
-void send_to_relay(int fd, const std::string &msg) {
+
+// {"node":1,"life":3,"seq":42,"wall_us":172495512345,"err_us":12,"msg":"..."}
+void send_to_relay(const std::string &msg) {
+
+    const int fd = relay_fd.load();
+    if (fd < 0) return;
 
     const unsigned long long seq = msgs_sent_to_browser_count.fetch_add(1, memory_order_relaxed);
 
     long long wall_us = 0, err_us = -1;
     get_cur_time(wall_us, err_us);
 
-    // <life> <msg idx> <wall_us> <err_us> (node N) (msg)
     ostringstream line;
-    line << life_count << ' ' << seq << ' ' << wall_us << ' ' << err_us
-         << " (node " << myNodeID << ") (" << msg << ")\n";
+    line << '{'
+         << "\"node\":"    << myNodeID         << ','
+         << "\"life\":"    << life_count       << ','
+         << "\"seq\":"     << seq              << ','
+         << "\"wall_us\":" << wall_us          << ','
+         << "\"err_us\":"  << err_us           << ','
+         << "\"msg\":\""   << json_escape(msg) << '"'
+         << "}\n";
     const string out = line.str();
 
     lock_guard lock(relay_mutex);

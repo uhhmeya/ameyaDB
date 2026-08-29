@@ -6,15 +6,22 @@ const MAX_BACKOFF = 5000
 
 export const NUM_NODES = 5
 
+export type msg = {
+    node: number
+    life: number
+    seq: number
+    wall_us: number
+    err_us: number
+    msg: string
+}
+
 export function useRelay() {
     const wsRef = useRef<WebSocket | null>(null)
     const backoffRef = useRef(INITIAL_BACKOFF)
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const cancelledRef = useRef(false)
     const [connected, setConnected] = useState(false)
-    const [messages, setMessages] = useState<string[]>([])
-    const [roster, setRoster] = useState<number[]>([])
-    const [ready, setReady] = useState(false)
+    const [messages, setMessages] = useState<msg[]>([])
 
     // tries to connect to relay on mount
     useEffect(() => {
@@ -33,21 +40,11 @@ export function useRelay() {
             setConnected(true)
         }
 
+        // relay sends msg -- keep the parsed record, not the raw text
         ws.onmessage = (event) => {
-            // control frames from the relay itself are JSON --
-            // node log lines are plain text and fall through to the log
-            try {
-                const data = JSON.parse(event.data)
-                if (data && typeof data === 'object' && data.type === 'roster') {
-                    setRoster(data.nodes)
-                    // relay latches this true once all nodes have been seen --
-                    // the sanity check only applies at first
-                    setReady(data.ready)
-                    return
-                }
-            } catch { /* not JSON -- a node logged something */ }
-
-            setMessages(prev => [...prev, event.data])
+            let data: msg
+            data = JSON.parse(event.data)
+            setMessages(prev => [...prev, data])
         }
 
         // relay is not running / connection dropped
@@ -56,8 +53,6 @@ export function useRelay() {
             if (wsRef.current !== ws) return
 
             setConnected(false)
-            setRoster([])
-            setReady(false)   // a new relay session must pass the gate again
             if (cancelledRef.current) return
             timeoutRef.current = setTimeout(connect_to_relay, backoffRef.current)
             backoffRef.current = Math.min(backoffRef.current * 2, MAX_BACKOFF)
@@ -77,5 +72,5 @@ export function useRelay() {
         }
     }, [])
 
-    return { connected, messages, roster, ready, send_msg }
+    return { connected, messages, send_msg }
 }
