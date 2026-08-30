@@ -1,3 +1,5 @@
+import type { msg } from '../utils/useRelay.tsx'
+
 export type Action = 'put' | 'lost'
 export type Role = 'reader' | 'writer'
 
@@ -45,47 +47,47 @@ export type Cluster = {
     links: LinkState[]
 }
 
-const LINE = /^(\d+:\d+\.\d+)\s+\(node\s+(\d+)\)\s+\((.+)\)$/
 const BODY = /^(?:\d+\s+)?(put|lost)\s+(reader|writer)\s+on\s+(\d+)<--->(\d+)$/
 
-export function parse_event(raw: string, seq: number): LinkEvent | null {
-    const line = LINE.exec(raw.trim())
-    if (!line) return null
+function format_ts(wall_us: number): string {
+    return new Date(wall_us / 1000).toISOString().slice(11, 23)   // HH:MM:SS.mmm
+}
 
-    const body = BODY.exec(line[3].trim())
+export function parse_event(entry: msg): LinkEvent | null {
+    const body = BODY.exec(entry.msg.trim())
     if (!body) return null
 
-    const node = Number(line[2])
+    const node = entry.node
     const a = Number(body[3])
     const b = Number(body[4])
     if (node !== a && node !== b) return null
 
     return {
-        seq,
-        ts: line[1],
+        seq: entry.seq,
+        ts: format_ts(entry.wall_us),
         node,
-        incarnation: 0,
+        incarnation: entry.life,
         action: body[1] as Action,
         role: body[2] as Role,
         a,
         b,
         peer: node === a ? b : a,
-        raw,
+        raw: entry.msg,
     }
 }
 
 const up = (e: Endpoint | null) => e !== null && e.writer && e.reader
 
-export function build_cluster(messages: string[], num_nodes = 5): Cluster {
+export function build_cluster(messages: msg[], num_nodes = 5): Cluster {
     const events: LinkEvent[] = []
     const unparsed: string[] = []
     const ends = new Map<string, Endpoint>()
     const last = new Map<number, LinkEvent>()
 
-    messages.forEach((raw, i) => {
-        const e = parse_event(raw, i)
+    messages.forEach((entry) => {
+        const e = parse_event(entry)
         if (!e) {
-            if (raw.trim()) unparsed.push(raw)
+            if (entry.msg.trim()) unparsed.push(entry.msg)
             return
         }
         events.push(e)

@@ -34,7 +34,6 @@ xnt load_snap();
 void replay_wal(xnt x);
 void attach_reader_to_tcp_wire(int peer_id);
 
-
 static const string RELAY_IP = "10.0.100.70";
 constexpr int RELAY_PORT = 9000;
 

@@ -1,4 +1,4 @@
-_# ameyaDB
+# ameyaDB
 Stores Key-->Value pairs across 5 nodes. Each node is an EC2 in a different AZ. 
 Cluster agrees on order of writes applied via the RAFT consensus algorithm. 
 Incremental snapshotting + WAL log is used so that each node survives crash.

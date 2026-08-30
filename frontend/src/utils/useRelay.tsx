@@ -22,8 +22,10 @@ export function useRelay() {
     const cancelledRef = useRef(false)
     const [connected, setConnected] = useState(false)
     const [messages, setMessages] = useState<msg[]>([])
+    const [hellos, setHellos] = useState(0)
 
-    // tries to connect to relay on mount
+
+
     useEffect(() => {
         connect_to_relay()
         return () => disconnect_from_relay()
@@ -40,18 +42,23 @@ export function useRelay() {
             setConnected(true)
         }
 
-        // relay sends msg -- keep the parsed record, not the raw text
+        // relay sends msg
         ws.onmessage = (event) => {
-            let data: msg
-            data = JSON.parse(event.data)
+            const data: msg = JSON.parse(event.data)
+            handle_msg(data)
+        }
+
+        function handle_msg(data: msg) {
+            if (data.msg === 'hello') {
+                setHellos(prev => prev + 1)
+                return
+            }
             setMessages(prev => [...prev, data])
         }
 
-        // relay is not running / connection dropped
+        // can't connect to relay
         ws.onclose = () => {
-            // stale socket from a StrictMode remount -- ignore it
-            if (wsRef.current !== ws) return
-
+            if (wsRef.current !== ws) return // strict mode
             setConnected(false)
             if (cancelledRef.current) return
             timeoutRef.current = setTimeout(connect_to_relay, backoffRef.current)
@@ -65,12 +72,12 @@ export function useRelay() {
         wsRef.current?.close()
     }
 
-    // sends msg through WS
+    // sends msg to relay
     const send_msg = useCallback((data: unknown) => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
             wsRef.current.send(JSON.stringify(data))
         }
     }, [])
 
-    return { connected, messages, send_msg }
+    return { connected, messages, hellos, send_msg }
 }

@@ -42,7 +42,6 @@ async def send_to_browser(msg):
 # reader receives bytes from wire
 # writer sends bytes into wire
 async def on_TCP(reader, writer):
-
     node_id = None
     try:
 

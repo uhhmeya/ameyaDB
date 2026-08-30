@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react'
 import { build_cluster } from '../utils/cluster'
 import type { NodeState } from '../utils/cluster'
+import type { msg } from '../utils/useRelay.tsx'
 
-type DebugProps = {
-    messages: string[]
+interface DebugProps {
+    messages: msg[]
 }
 
 function Debug({ messages = [] }: DebugProps) {
@@ -45,7 +46,7 @@ function Debug({ messages = [] }: DebugProps) {
             </div>
 
             <div className="log" ref={log_ref}>
-                {messages.map((m, i) => <div key={i}>{m}</div>)}
+                {messages.map((m, i) => <div key={i}>{m.msg}</div>)}
             </div>
         </div>
     )
