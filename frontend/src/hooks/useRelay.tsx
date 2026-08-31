@@ -12,19 +12,20 @@ export type msg = {
     seq: number
     wall_us: number
     err_us: number
+    type: string
     msg: string
 }
 
-export function useRelay() {
+export function useRelay(on_msg: (m: msg) => void) {
     const wsRef = useRef<WebSocket | null>(null)
     const backoffRef = useRef(INITIAL_BACKOFF)
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const cancelledRef = useRef(false)
+    const on_msg_ref = useRef(on_msg)
+    on_msg_ref.current = on_msg
+
     const [connected, setConnected] = useState(false)
-    const [messages, setMessages] = useState<msg[]>([])
-    const [hellos, setHellos] = useState(0)
-
-
+    const [log, setLog] = useState<msg[]>([])
 
     useEffect(() => {
         connect_to_relay()
@@ -42,18 +43,11 @@ export function useRelay() {
             setConnected(true)
         }
 
-        // relay sends msg
+        //! handle msg from relay
         ws.onmessage = (event) => {
             const data: msg = JSON.parse(event.data)
-            handle_msg(data)
-        }
-
-        function handle_msg(data: msg) {
-            if (data.msg === 'hello') {
-                setHellos(prev => prev + 1)
-                return
-            }
-            setMessages(prev => [...prev, data])
+            setLog(prev => [...prev, data]) // calls ingest
+            on_msg_ref.current(data)
         }
 
         // can't connect to relay
@@ -79,5 +73,5 @@ export function useRelay() {
         }
     }, [])
 
-    return { connected, messages, hellos, send_msg }
+    return { connected, log, send_msg }
 }

@@ -1,131 +1,83 @@
-import type { msg } from '../utils/useRelay.tsx'
+import type { msg } from '../hooks/useRelay'
 
-export type Action = 'put' | 'lost'
-export type Role = 'reader' | 'writer'
-
-export type LinkEvent = {
-    seq: number
-    ts: string
-    node: number
-    incarnation: number
-    action: Action
-    role: Role
+export type WireState = {
     a: number
     b: number
-    peer: number
-    raw: string
-}
-
-export type Endpoint = {
-    writer: boolean
-    reader: boolean
-    ts: string
-    seq: number
-}
-
-export type LinkState = {
-    a: number
-    b: number
-    a_side: Endpoint | null
-    b_side: Endpoint | null
-    healthy: boolean
+    isUP: boolean
 }
 
 export type NodeState = {
     id: number
-    degree: number
     peers: number[]
     last_ts: string | null
-    last_seq: number
-    incarnation: number
+    life: number
 }
 
 export type Cluster = {
-    events: LinkEvent[]
-    unparsed: string[]
     nodes: NodeState[]
-    links: LinkState[]
+    links: WireState[]
+    unparsed: string[] // junk
 }
 
-const BODY = /^(?:\d+\s+)?(put|lost)\s+(reader|writer)\s+on\s+(\d+)<--->(\d+)$/
-
-function format_ts(wall_us: number): string {
-    return new Date(wall_us / 1000).toISOString().slice(11, 23)   // HH:MM:SS.mmm
+export type ClusterState = {
+    n: number
+    side: boolean[][]
+    last_ts: (string | null)[]
+    life: number[]
+    unparsed: string[] //junk
 }
 
-export function parse_event(entry: msg): LinkEvent | null {
-    const body = BODY.exec(entry.msg.trim())
-    if (!body) return null
+const LINK = /^(\d+)\s+(\d+)\s+(up|down)$/
 
-    const node = entry.node
-    const a = Number(body[3])
-    const b = Number(body[4])
-    if (node !== a && node !== b) return null
+const stamp = (wall_us: number) =>
+    new Date(wall_us / 1000).toISOString().slice(11, 23)   // HH:MM:SS.mmm
 
+export function empty_state(n = 5): ClusterState {
     return {
-        seq: entry.seq,
-        ts: format_ts(entry.wall_us),
-        node,
-        incarnation: entry.life,
-        action: body[1] as Action,
-        role: body[2] as Role,
-        a,
-        b,
-        peer: node === a ? b : a,
-        raw: entry.msg,
+        n,
+        side: Array.from({ length: n }, () => Array<boolean>(n).fill(false)),
+        last_ts: Array<string | null>(n).fill(null),
+        life: Array<number>(n).fill(0),
+        unparsed: [], // junk
     }
 }
 
-const up = (e: Endpoint | null) => e !== null && e.writer && e.reader
+// updates side cells with T/F
+function apply_wire(s: ClusterState, m: msg) {
+    const g = LINK.exec(m.msg.trim())
+    if (!g) { s.unparsed.push(m.msg); return }
+    const sender = Number(g[1]), peer = Number(g[2])
+    if (sender !== m.node || peer < 0 || peer >= s.n) { s.unparsed.push(m.msg); return }
+    s.side[m.node][peer] = g[3] === 'up'
+}
 
-export function build_cluster(messages: msg[], num_nodes = 5): Cluster {
-    const events: LinkEvent[] = []
-    const unparsed: string[] = []
-    const ends = new Map<string, Endpoint>()
-    const last = new Map<number, LinkEvent>()
+export function apply_msg(s: ClusterState, m: msg) {
 
-    messages.forEach((entry) => {
-        const e = parse_event(entry)
-        if (!e) {
-            if (entry.msg.trim()) unparsed.push(entry.msg)
-            return
-        }
-        events.push(e)
-
-        const key = `${e.node}->${e.peer}`
-        const cur = ends.get(key) ?? { writer: false, reader: false, ts: e.ts, seq: e.seq }
-        cur[e.role] = e.action === 'put'
-        cur.ts = e.ts
-        cur.seq = e.seq
-        ends.set(key, cur)
-
-        last.set(e.node, e)
-    })
-
-    const links: LinkState[] = []
-    for (let a = 0; a < num_nodes; a++) {
-        for (let b = a + 1; b < num_nodes; b++) {
-            const a_side = ends.get(`${a}->${b}`) ?? null
-            const b_side = ends.get(`${b}->${a}`) ?? null
-            links.push({ a, b, a_side, b_side, healthy: up(a_side) && up(b_side) })
-        }
+    // new life means break old wires
+    if (m.life > s.life[m.node]) {
+        s.life[m.node] = m.life
+        s.side[m.node].fill(false)
     }
 
-    const nodes: NodeState[] = []
-    for (let id = 0; id < num_nodes; id++) {
-        const peers = links
-            .filter(l => l.healthy && (l.a === id || l.b === id))
-            .map(l => (l.a === id ? l.b : l.a))
-        const seen = last.get(id)
-        nodes.push({
-            id,
-            degree: peers.length,
-            peers,
-            last_ts: seen ? seen.ts : null,
-            last_seq: seen ? seen.seq : -1,
-            incarnation: seen ? seen.incarnation : 0,
-        })
-    }
+    s.last_ts[m.node] = stamp(m.wall_us)
 
-    return { events, unparsed, nodes, links }
+    // update wire connections
+    if (m.type === 'wire')
+        apply_wire(s, m)
+}
+
+export function derive(s: ClusterState): Cluster {
+    const links: WireState[] = []
+    for (let a = 0; a < s.n; a++)
+        for (let b = a + 1; b < s.n; b++)
+            links.push({ a, b, isUP: s.side[a][b] && s.side[b][a] })
+    const nodes: NodeState[] = Array.from({ length: s.n }, (_, id) => ({
+        id,
+        peers: links
+            .filter(l => l.isUP && (l.a === id || l.b === id))
+            .map(l => (l.a === id ? l.b : l.a)),
+        last_ts: s.last_ts[id],
+        life: s.life[id],
+    }))
+    return { nodes, links, unparsed: s.unparsed }
 }

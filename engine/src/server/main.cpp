@@ -38,9 +38,6 @@ static const string RELAY_IP = "10.0.100.70";
 constexpr int RELAY_PORT = 9000;
 
 // utils
-static string link_id(int a, int b) {
-    return to_string(min(a, b)) + "<--->" + to_string(max(a, b));
-}
 int attach_listener_to_port(int myPort) {
     int listener_fd = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -177,7 +174,7 @@ static void keep_relay_initiator_on_wire(string host, int port) {
     while (true) {
         int fd = initiate_to_relay(host, port);   // blocks until connected
         relay_fd = fd;
-        send_to_relay("hello");
+        send_to_relay("hello", "hello");
         attach_reader_to_relay(fd); // blocks until relay wire breaks
         relay_fd = -1;
         close(fd);
@@ -185,18 +182,16 @@ static void keep_relay_initiator_on_wire(string host, int port) {
 }
 
 // keeps connection between peers
-static void keep_peer_initiator_on_wire(int peer_id) {
+static void keep_initiator_on_wire(int peer_id) {
     while (true) {
 
         int fd = initiate_to_peer(peer_id);
         my_fd_to[peer_id] = fd;
-        send_to_relay(to_string(myNodeID) + " put writer on " + link_id(myNodeID, peer_id));
 
         attach_reader_to_tcp_wire(peer_id);
 
         int stale = fd;
         my_fd_to[peer_id].compare_exchange_strong(stale, -1);
-        send_to_relay(to_string(myNodeID) + " lost writer on " + link_id(myNodeID, peer_id));
         close(fd);
     }
 }
@@ -211,19 +206,17 @@ static void put_acceptor_on_wire(int peerFD) {
     }
 
     my_fd_to[sender_id] = peerFD;
-    send_to_relay(to_string(myNodeID) + " put writer on " + link_id(myNodeID, sender_id));
 
     attach_reader_to_tcp_wire(sender_id);
 
     int stale = peerFD;
     my_fd_to[sender_id].compare_exchange_strong(stale, -1);
-    send_to_relay(to_string(myNodeID) + " lost writer on " + link_id(myNodeID, sender_id));
     close(peerFD);
 }
 
 void attach_reader_to_tcp_wire(int peer_id) {
     int peerFD = my_fd_to[peer_id].load();
-    send_to_relay(to_string(myNodeID) + " put reader on " + link_id(myNodeID, peer_id));
+    send_to_relay("wire", to_string(myNodeID) + " " + to_string(peer_id) + " up");
 
     char op = 0;
     while (true) {
@@ -231,7 +224,7 @@ void attach_reader_to_tcp_wire(int peer_id) {
         if      (op == WRITE) { if (!handle_write(peerFD)) break; }
         else if (op == READ)  { if (!handle_read(peerFD))  break; }
     }
-    send_to_relay(to_string(myNodeID) + " lost reader on " + link_id(myNodeID, peer_id));
+    send_to_relay("wire", to_string(myNodeID) + " " + to_string(peer_id) + " down");
 }
 
 static void accept_4ever(int listener) {
@@ -303,7 +296,7 @@ int main(int argc, char *argv[]) {
 
     for (int peer = myNodeID + 1; peer < NUM_NODES; ++peer) {
         thread([peer] {
-            keep_peer_initiator_on_wire(peer);
+            keep_initiator_on_wire(peer);
         }).detach();
     }
     accept_4ever(listener);

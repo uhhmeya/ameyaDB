@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { NUM_NODES } from '../utils/useRelay.tsx'
+import { NUM_NODES } from '../hooks/useRelay.tsx'
 
 const COOLDOWN_MS = 10_000
 

@@ -166,8 +166,8 @@ static string json_escape(const string &s) {
 }
 
 
-// {"node":1,"life":3,"seq":42,"wall_us":172495512345,"err_us":12,"msg":"..."}
-void send_to_relay(const std::string &msg) {
+// {"node":1,"life":3,"seq":42,"wall_us":172495512345,"err_us":12,"type":"wire","msg":"1 3 up"}
+void send_to_relay(const std::string &type, const std::string &msg) {
 
     const int fd = relay_fd.load();
     if (fd < 0) return;
@@ -184,6 +184,7 @@ void send_to_relay(const std::string &msg) {
          << "\"seq\":"     << seq              << ','
          << "\"wall_us\":" << wall_us          << ','
          << "\"err_us\":"  << err_us           << ','
+         << "\"type\":\""  << type             << "\","
          << "\"msg\":\""   << json_escape(msg) << '"'
          << "}\n";
     const string out = line.str();
@@ -191,4 +192,8 @@ void send_to_relay(const std::string &msg) {
     lock_guard lock(relay_mutex);
     ssize_t w = write(fd, out.c_str(), out.size());
     (void) w;
+}
+
+void send_to_relay(const std::string &msg) {
+    send_to_relay("stat", msg);
 }

@@ -1,28 +1,27 @@
 import { useEffect, useRef } from 'react'
-import { build_cluster } from '../utils/cluster'
-import type { NodeState } from '../utils/cluster'
-import type { msg } from '../utils/useRelay.tsx'
+import type { Cluster, NodeState } from '../utils/cluster'
+import type { msg } from '../hooks/useRelay.tsx'
 
 interface DebugProps {
-    messages: msg[]
+    cluster: Cluster
+    log: msg[]
 }
 
-function Debug({ messages = [] }: DebugProps) {
+function Debug({ cluster, log }: DebugProps) {
     const log_ref = useRef<HTMLDivElement | null>(null)
 
-    const cluster = build_cluster(messages)
     const total = cluster.nodes.length - 1
-    const healthy = cluster.links.filter(l => l.healthy).length
+    const healthy = cluster.links.filter(l => l.isUP).length
 
     useEffect(() => {
         const el = log_ref.current
         if (el) el.scrollTop = el.scrollHeight
-    }, [messages.length])
+    }, [log.length])
 
     const card_class = (n: NodeState) => {
         if (n.last_ts === null) return 'node-card silent'
-        if (n.degree === 0) return 'node-card down'
-        if (n.degree < total) return 'node-card degraded'
+        if (n.peers.length === 0) return 'node-card down'
+        if (n.peers.length < total) return 'node-card degraded'
         return 'node-card'
     }
 
@@ -32,7 +31,7 @@ function Debug({ messages = [] }: DebugProps) {
                 {cluster.nodes.map(n => (
                     <div key={n.id} className={card_class(n)}>
                         <div className="node-card-id">node {n.id}</div>
-                        <div>degree {n.degree}/{total}</div>
+                        <div>degree {n.peers.length}/{total}</div>
                         <div>seen {n.last_ts ?? '--'}</div>
                     </div>
                 ))}
@@ -46,7 +45,7 @@ function Debug({ messages = [] }: DebugProps) {
             </div>
 
             <div className="log" ref={log_ref}>
-                {messages.map((m, i) => <div key={i}>{m.msg}</div>)}
+                {log.map((m, i) => <div key={i}>{m.msg}</div>)}
             </div>
         </div>
     )
