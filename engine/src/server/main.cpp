@@ -149,21 +149,28 @@ static int initiate_to_peer(int peer_id) {
     }
 }
 
+static const char *ALLOW_SCRIPT = "/usr/local/bin/ameyaDB-allow.sh";
+static const char *CRASH_SCRIPT = "/usr/local/bin/ameyaDB-crash.sh";
+
 static bool handle_relay_msg(int fd, const string &msg) {
     (void)fd;
 
-    // forwards msg to script
     if (msg.rfind("connect ", 0) == 0) {
         string peers = msg.substr(8);
-        system((string("sudo ") + NET_HELPER + " partition " + to_string(myNodeID) + " " + peers).c_str());
+        string connect_cmd = "sudo " + string(ALLOW_SCRIPT) + " "
+                           + to_string(myNodeID) + " " + peers;
+        system(connect_cmd.c_str());
+        alive = true;
         return true;
     }
 
-    // forwards msg to script
     if (msg.rfind("terminate", 0) == 0) {
         int secs = (msg.size() > 10) ? stoi(msg.substr(10)) : 30;
         send_to_relay("crash", to_string(myNodeID) + " " + to_string(secs));
-        system((string("sudo systemd-run --collect --quiet --unit=ameyaDB-chaos-") + to_string(myNodeID) + " " + NET_HELPER + " crash " + to_string(secs)).c_str());
+        string terminate_cmd = "sudo systemd-run --collect --quiet --unit=ameyaDB-chaos-"
+                             + to_string(myNodeID) + " " + CRASH_SCRIPT
+                             + " " + to_string(myNodeID) + " " + to_string(secs);
+        system(terminate_cmd.c_str());
         return true;
     }
 

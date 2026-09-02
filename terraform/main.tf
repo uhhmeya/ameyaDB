@@ -223,6 +223,12 @@ fi
 mkdir -p /var/log/ameyaDB/server
 chown -R ec2-user:ec2-user /var/log/ameyaDB
 
+# Every partition and every simulated crash is built on iptables, so a missing
+# binary would break chaos testing silently -- the node shells out with
+# system(), which discards the failure. Make sure it is here before anything
+# depends on it.
+command -v iptables >/dev/null 2>&1 || dnf install -y iptables || yum install -y iptables
+
 # ---- time stack repair (all three are Amazon Linux 2 version skew) ----
 
 # 1. chrony.conf points at the PTP hardware clock, but AL2's ENA driver has no
@@ -265,9 +271,22 @@ git clone --depth 1 https://github.com/uhhmeya/ameyaDB.git /home/ec2-user/ameyaD
 mkdir -p /home/ec2-user/ameyaDB/engine/src/output/EXEC
 cd /home/ec2-user/ameyaDB/engine/src/server
 g++ -std=c++20 -pthread -o /home/ec2-user/ameyaDB/engine/src/output/EXEC/server main.cpp handlers.cpp walsnap.cpp threads.cpp -lclockbound
+
+# The chaos scripts get copied OUT of the repo, not run from it. The repo sits
+# under /home/ec2-user, which ec2-user can write to freely -- and both scripts
+# below get a NOPASSWD sudo grant. Pointing that grant at a file ec2-user can
+# rewrite would hand it root for free. /usr/local/bin is root-owned, so the
+# node can execute them but not edit them.
+install -m 0755 /home/ec2-user/ameyaDB/engine/src/scripts/ameyaDB-allow.sh /usr/local/bin/ameyaDB-allow.sh
+install -m 0755 /home/ec2-user/ameyaDB/engine/src/scripts/ameyaDB-crash.sh /usr/local/bin/ameyaDB-crash.sh
+
+# The node runs as ec2-user, but iptables and systemctl are root-only.
+# systemd-run is here because the crash script has to outlive the process that
+# launches it -- see the comment on ameyaDB-crash.sh.
+echo 'ec2-user ALL=(root) NOPASSWD: /usr/local/bin/ameyaDB-allow.sh, /usr/local/bin/ameyaDB-crash.sh, /usr/bin/systemd-run' > /etc/sudoers.d/ameyaDB-net
+chmod 0440 /etc/sudoers.d/ameyaDB-net
 SCRIPT
 chmod +x /usr/local/bin/build_ameyaDB.sh
-chown ec2-user:ec2-user /usr/local/bin/build_ameyaDB.sh
 
 # Build ONCE per boot (oneshot), not on every restart. Splitting build from
 # run is what makes rebirth fast: a chaos-test crash now relaunches the
@@ -316,6 +335,12 @@ StartLimitIntervalSec=0
 Type=simple
 User=ec2-user
 WorkingDirectory=/var/log/ameyaDB/server
+# Clear any DROP rules left over from a chaos test before coming up. If a
+# crash helper is ever killed mid-sleep, its rules would otherwise outlive it
+# and leave this node firewalled off the mesh forever with no sign why.
+# The `+` prefix runs this as root despite User=ec2-user above. Healing with
+# "all" returns before it resolves any peer, so it cannot fail on boot DNS.
+ExecStartPre=+/usr/local/bin/ameyaDB-allow.sh ${count.index} all
 ExecStart=/home/ec2-user/ameyaDB/engine/src/output/EXEC/server ${count.index}
 Restart=always
 RestartSec=1
