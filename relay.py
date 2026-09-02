@@ -69,23 +69,42 @@ async def on_TCP(reader, writer):
             log(f"node{node_id} wire broke")
         writer.close()
 
-# called when browser connects to relay
+# writes one line onto a node's TCP wire
+# the node's reader thread picks it up and acts on it
+async def send_to_node(node, text):
+    writer = nodeFDtable[node]
+    writer.write((text + "\n").encode())
+    await writer.drain()
+    log(f"node{node} <- {text}")
+
+# called when browser (or test.py) connects to relay
 async def on_WS(websocket):
     global browser
-    browser = websocket
     conn_id = websocket.remote_address[1]
-    log(f"relay & browser are connected")
+
+    # first WS client is the browser
+    # later clients (test.py) only send commands, don't steal the browser slot
+    if browser is None:
+        browser = websocket
+        log(f"relay & browser are connected")
 
     try:
         async for raw in websocket:
-            msg = json.loads(raw)["msg"]
-            if msg == "run_test.py":
+            data = json.loads(raw)
+
+            # {"to": n, "msg": text} -> forward text to node n
+            if "to" in data:
+                await send_to_node(data["to"], data["msg"])
+
+            elif data["msg"] == "run_test.py":
                 asyncio.create_task(run_test())
 
     except websockets.exceptions.ConnectionClosed:
-        log(f"browser ({conn_id}) disconnected")
+        log(f"WS client ({conn_id}) disconnected")
 
-    return
+    finally:
+        if browser is websocket:
+            browser = None
 
 async def main():
 

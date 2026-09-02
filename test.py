@@ -1,90 +1,57 @@
-import os
-import signal
-import subprocess
-import time
+import asyncio
+import json
 from datetime import datetime
+
+import websockets
+
+# relay.py is the one who spawns test.py, so the relay is always on this machine
+RELAY_WS = "ws://127.0.0.1:8765"
+
+NUM_NODES = 5
+
+# websocket to the relay, set once in main()
+relay = None
 
 def log(msg):
     print(f"{datetime.now().strftime('%H:%M:%S')} {msg}")
 
-# ./ameyaDB
-ROOT = os.path.dirname(os.path.abspath(__file__))
+# every command is one envelope: {"to": node, "msg": text}
+# relay unwraps it and writes "text\n" onto that node's TCP wire
+async def send(node, text):
+    await relay.send(json.dumps({"to": node, "msg": text}))
+    log(f"[test] node{node} <- {text}")
 
-SERVER_DIR = os.path.join(ROOT, "engine/src/server")
-OUTPUT_DIR = os.path.join(ROOT, "engine/src/output")
-SNAP_DIR   = os.path.join(OUTPUT_DIR, "snaps")
-WAL_PATH   = os.path.join(OUTPUT_DIR, "wal.txt")
-EXEC_DIR   = os.path.join(OUTPUT_DIR, "EXEC")
-SERVER_EXEC_PATH = os.path.join(EXEC_DIR, "server")
-CLIENT_EXEC_PATH = os.path.join(EXEC_DIR, "client")
-DEBUG_DIR  = os.path.join(ROOT, "engine/debug")
+# peers is "all" or a digit string like "023"
+# "connect all" -> node connects to every node
+# "connect 023" -> node connects to nodes 0, 2, 3 only
+async def connect(node, peers):
+    await send(node, f"connect {peers}")
 
-NUM_NODES = 5
-SERVER_PORTS = [8080 + i for i in range(NUM_NODES)]
+# node terminates itself
+async def terminate(node):
+    await send(node, "terminate")
 
-def remove_stale():
+async def scenario():
 
-    # stale execs from a previous run
-    for exe in (SERVER_EXEC_PATH, CLIENT_EXEC_PATH):
-        if os.path.exists(exe):
-            os.remove(exe)
+    # wake the whole cluster into a full mesh
+    for n in range(NUM_NODES):
+        await connect(n, "all")
+    await asyncio.sleep(10)
 
-    # stale servers still holding any of the NUM_NODES ports
-    for port in SERVER_PORTS:
-        stale_server = subprocess.run(["lsof", "-t", f"-i:{port}"], capture_output=True, text=True)
-        for pid in stale_server.stdout.strip().splitlines():
-            os.kill(int(pid), signal.SIGKILL)
-            print(f"[test -> remove_stale] removed stale server({pid}) on port {port}")
+    # kill node 4 outright
+    await terminate(4)
+    await asyncio.sleep(5)
 
-    # stale snapshot files
-    if os.path.exists(SNAP_DIR):
-        for file in os.listdir(SNAP_DIR):
-            os.remove(os.path.join(SNAP_DIR, file))
+    # partition node 0: it may only talk to 1 and 2 now
+    await connect(0, "12")
+    await asyncio.sleep(10)
 
-    # stale WAL
-    if os.path.exists(WAL_PATH):
-        os.remove(WAL_PATH)
-
-    # stale debug logs
-    if os.path.exists(DEBUG_DIR):
-        for file in os.listdir(DEBUG_DIR):
-            os.remove(os.path.join(DEBUG_DIR, file))
-    else:
-        os.makedirs(DEBUG_DIR)
-
-def main():
-    print("\n\n")
-    remove_stale()
-
-    # compile server
-    subprocess.run(
-        ["g++", "-std=c++20", "-o", SERVER_EXEC_PATH,
-         "main.cpp", "handlers.cpp", "walsnap.cpp", "threads.cpp"],
-        cwd=SERVER_DIR, check=True
-    )
-
-
-    # maps node to log file
-    log_files = [
-        open(os.path.join(DEBUG_DIR, f"node{i}.log"), "w") for i in range(NUM_NODES)]
-
-    # creates process
-    servers = [
-        subprocess.Popen([SERVER_EXEC_PATH, str(i), "127.0.0.1"], stdout=log_files[i], stderr=subprocess.STDOUT, cwd=SERVER_DIR)
-        for i in range(NUM_NODES)
-    ]
-
-    RUN_SECONDS = 30
-    time.sleep(RUN_SECONDS)
-
-    # terminate process
-    for s in servers:
-        s.send_signal(signal.SIGKILL)
-        s.wait()
-    for f in log_files:
-        f.close()
-
-    log("all servers terminated\n\n")
+async def main():
+    global relay
+    async with websockets.connect(RELAY_WS) as ws:
+        relay = ws
+        await scenario()
+    log("[test] scenario done")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
