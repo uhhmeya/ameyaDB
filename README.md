@@ -1,9 +1,7 @@
 # ameyaDB
-Stores Key-->Value pairs across 5 nodes. Each node is an EC2 in a different AZ. 
-Cluster agrees on order of writes applied via the RAFT consensus algorithm. 
-Incremental snapshotting + WAL log is used so that each node survives crash.
-Nodes forward messages to browser over a relay server that runs on your device.
-Browser displays behavior of cluster during various RAFT edge cases
+Stores Key-Val pairs over 5 EC2s each in a different AZ. Nodes use RAFT Consensus, incremental snapshotting, & WAL log.
+Nodes forward messages to browser over a relay server on the bastion to display behavior & performance of cluster
+during various raft edge cases
 
 # High Level Overview
 1. Built & Tested WAL + incremental snapshot crash recovery mechanism to restore DB state after arbitrary crashes.

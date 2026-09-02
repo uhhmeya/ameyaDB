@@ -17,12 +17,16 @@
 #include "../headers/globals.h"
 #include "../headers/threads.h"
 
+static const char *NET_HELPER = "/usr/local/bin/ameyaDB-net.sh";
+
 int myNodeID;
 atomic<xnt> log_index{0};
 vector<atomic<int>> my_fd_to;
 atomic<int> relay_fd{-1};
 
 atomic<bool> alive{false};
+static vector<atomic<bool>> allowed_peers;
+
 
 // announce
 bool handle_write(int x);
@@ -147,10 +151,22 @@ static int initiate_to_peer(int peer_id) {
 
 static bool handle_relay_msg(int fd, const string &msg) {
     (void)fd;
-    if (msg == "wake") {
-        alive = true;
-        cout << "node " << myNodeID << " is alive\n";
+
+    // forwards msg to script
+    if (msg.rfind("connect ", 0) == 0) {
+        string peers = msg.substr(8);
+        system((string("sudo ") + NET_HELPER + " partition " + to_string(myNodeID) + " " + peers).c_str());
+        return true;
     }
+
+    // forwards msg to script
+    if (msg.rfind("terminate", 0) == 0) {
+        int secs = (msg.size() > 10) ? stoi(msg.substr(10)) : 30;
+        send_to_relay("crash", to_string(myNodeID) + " " + to_string(secs));
+        system((string("sudo systemd-run --collect --quiet --unit=ameyaDB-chaos-") + to_string(myNodeID) + " " + NET_HELPER + " crash " + to_string(secs)).c_str());
+        return true;
+    }
+
     return true;
 }
 

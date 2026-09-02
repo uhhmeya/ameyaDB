@@ -39,8 +39,6 @@ async def send_to_browser(msg):
         log("FATAL: browser connection closed mid-send")
         os._exit(1)
 
-# reader receives bytes from wire
-# writer sends bytes into wire
 async def on_TCP(reader, writer):
     node_id = None
     try:
@@ -69,21 +67,18 @@ async def on_TCP(reader, writer):
             log(f"node{node_id} wire broke")
         writer.close()
 
-# writes one line onto a node's TCP wire
-# the node's reader thread picks it up and acts on it
+
 async def send_to_node(node, text):
     writer = nodeFDtable[node]
     writer.write((text + "\n").encode())
     await writer.drain()
     log(f"node{node} <- {text}")
 
-# called when browser (or test.py) connects to relay
+
 async def on_WS(websocket):
     global browser
     conn_id = websocket.remote_address[1]
 
-    # first WS client is the browser
-    # later clients (test.py) only send commands, don't steal the browser slot
     if browser is None:
         browser = websocket
         log(f"relay & browser are connected")

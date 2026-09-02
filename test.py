@@ -5,51 +5,41 @@ from datetime import datetime
 import websockets
 
 # relay.py is the one who spawns test.py, so the relay is always on this machine
-RELAY_WS = "ws://127.0.0.1:8765"
+TEST_TO_RELAY_WS = "ws://127.0.0.1:8765"
 
 NUM_NODES = 5
 
 # websocket to the relay, set once in main()
-relay = None
+test_to_relay_ws = None
 
 def log(msg):
     print(f"{datetime.now().strftime('%H:%M:%S')} {msg}")
 
-# every command is one envelope: {"to": node, "msg": text}
-# relay unwraps it and writes "text\n" onto that node's TCP wire
+# {"to": node, "msg": text}
 async def send(node, text):
-    await relay.send(json.dumps({"to": node, "msg": text}))
-    log(f"[test] node{node} <- {text}")
-
-# peers is "all" or a digit string like "023"
-# "connect all" -> node connects to every node
-# "connect 023" -> node connects to nodes 0, 2, 3 only
-async def connect(node, peers):
-    await send(node, f"connect {peers}")
-
-# node terminates itself
-async def terminate(node):
-    await send(node, "terminate")
+    await test_to_relay_ws.send(json.dumps({"to": node, "msg": text}))
 
 async def scenario():
 
-    # wake the whole cluster into a full mesh
+    # wake cluster
     for n in range(NUM_NODES):
-        await connect(n, "all")
+        await send(n, "connect all")
     await asyncio.sleep(10)
 
-    # kill node 4 outright
-    await terminate(4)
-    await asyncio.sleep(5)
-
-    # partition node 0: it may only talk to 1 and 2 now
-    await connect(0, "12")
-    await asyncio.sleep(10)
+    # terminate 1 node
+    # wait for it to come back up
+    # let it connect to all other nodes
+    # repeat for all nodes
+    for n in range(NUM_NODES):
+        await send(n, "terminate")
+        await asyncio.sleep(5)
+        await send(n, "connect all")
+        await asyncio.sleep(10)
 
 async def main():
-    global relay
-    async with websockets.connect(RELAY_WS) as ws:
-        relay = ws
+    global test_to_relay_ws
+    async with websockets.connect(TEST_TO_RELAY_WS) as ws:
+        test_to_relay_ws = ws
         await scenario()
     log("[test] scenario done")
 
