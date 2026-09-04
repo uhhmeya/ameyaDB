@@ -13,20 +13,17 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <netinet/tcp.h>
+#include <fcntl.h>
+#include <poll.h>
 
 #include "../headers/globals.h"
 #include "../headers/threads.h"
-
-static const char *NET_HELPER = "/usr/local/bin/ameyaDB-net.sh";
 
 int myNodeID;
 atomic<xnt> log_index{0};
 vector<atomic<int>> my_fd_to;
 atomic<int> relay_fd{-1};
-
-atomic<bool> alive{false};
-static vector<atomic<bool>> allowed_peers;
-
+atomic alive{false};
 
 // announce
 bool handle_write(int x);
@@ -38,8 +35,12 @@ xnt load_snap();
 void replay_wal(xnt x);
 void attach_reader_to_tcp_wire(int peer_id);
 
+static const string PEER_DOMAIN = "ameyadb.internal";
 static const string RELAY_IP = "10.0.100.70";
 constexpr int RELAY_PORT = 9000;
+
+static const char *ALLOW_SCRIPT = "/usr/local/bin/ameyaDB-allow.sh";
+static const char *CRASH_SCRIPT = "/usr/local/bin/ameyaDB-crash.sh";
 
 // utils
 int attach_listener_to_port(int myPort) {
@@ -86,139 +87,44 @@ static void set_keepalive(int fd) {
     setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &intvl, sizeof(intvl));
     setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &cnt, sizeof(cnt));
 }
-
-// constantly spams connection req to relay
-// when relay is up, tcp wire will exist between node & relay
-static int initiate_to_relay(const string &host, int port) {
-    int backoff_ms = 100;
-    while (true) {
-        int fd = socket(AF_INET, SOCK_STREAM, 0);
-        if (fd >= 0) {
-            sockaddr_in addr{};
-            addr.sin_family = AF_INET;
-            addr.sin_port = htons(port);
-
-            bool resolved = inet_pton(AF_INET, host.c_str(), &addr.sin_addr) == 1;
-            if (!resolved) {
-                addrinfo hints{};
-                hints.ai_family = AF_INET;
-                hints.ai_socktype = SOCK_STREAM;
-                addrinfo *res = nullptr;
-                if (getaddrinfo(host.c_str(), nullptr, &hints, &res) == 0 && res) {
-                    addr.sin_addr = reinterpret_cast<sockaddr_in *>(res->ai_addr)->sin_addr;
-                    freeaddrinfo(res);
-                    resolved = true;
-                }
-            }
-
-            if (resolved && connect(fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) == 0)
-                return fd;
-
-            close(fd);
-        }
-        sleep_for(milliseconds(backoff_ms));
-        backoff_ms = min(backoff_ms * 2, 3000);
-    }
-}
-
-// constantly spams connection req to peer
-// when peer is up, tcp wire will exist between peer & relay
-static int initiate_to_peer(int peer_id) {
-    int backoff_ms = 100;
-    int peerPort = 8080 + peer_id;
-    while (true) {
-        // a socket that failed connect() is unusable -- make a fresh one each try
-        int fd = socket(AF_INET, SOCK_STREAM, 0);
-        if (fd < 0)
-            throw runtime_error("[initiate] socket failed: " + string(strerror(errno)));
-        sockaddr_in addr{};
-        addr.sin_family = AF_INET;
-        addr.sin_port = htons(peerPort);
-        inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
-        if (connect(fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) == 0) {
-            set_keepalive(fd);
-            char msg[1 + sizeof(int)];
-            msg[0] = HELLO;
-            memcpy(&msg[1], &myNodeID, sizeof(myNodeID));
-            if (write(fd, msg, sizeof(msg)) == static_cast<ssize_t>(sizeof(msg)))
-                return fd;
-        }
-        close(fd);
-        sleep_for(milliseconds(backoff_ms));
-        backoff_ms = min(backoff_ms * 2, 3000);
-    }
-}
-
-static const char *ALLOW_SCRIPT = "/usr/local/bin/ameyaDB-allow.sh";
-static const char *CRASH_SCRIPT = "/usr/local/bin/ameyaDB-crash.sh";
-
-static bool handle_relay_msg(int fd, const string &msg) {
-    (void)fd;
-
-    if (msg.rfind("connect ", 0) == 0) {
-        string peers = msg.substr(8);
-        string connect_cmd = "sudo " + string(ALLOW_SCRIPT) + " "
-                           + to_string(myNodeID) + " " + peers;
-        system(connect_cmd.c_str());
-        alive = true;
+static bool resolve_ipv4(const string &host, in_addr &out) {
+    if (inet_pton(AF_INET, host.c_str(), &out) == 1)
         return true;
+
+    addrinfo hints{};
+    hints.ai_family   = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+
+    addrinfo *res = nullptr;
+    if (getaddrinfo(host.c_str(), nullptr, &hints, &res) != 0 || !res)
+        return false;
+
+    out = reinterpret_cast<sockaddr_in *>(res->ai_addr)->sin_addr;
+    freeaddrinfo(res);
+    return true;
+}
+static bool connect_with_timeout(int fd, const sockaddr_in &addr, int timeout_ms) {
+    int flags = fcntl(fd, F_GETFL, 0);
+    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+
+    int rc = connect(fd, reinterpret_cast<const sockaddr *>(&addr), sizeof(addr));
+    if (rc != 0 && errno != EINPROGRESS) return false;
+
+    if (rc != 0) {
+        pollfd p{fd, POLLOUT, 0};
+        if (poll(&p, 1, timeout_ms) != 1) return false;   // timed out
+
+        int err = 0;
+        socklen_t len = sizeof(err);
+        if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &len) != 0 || err != 0)
+            return false;
     }
 
-    if (msg.rfind("terminate", 0) == 0) {
-        int secs = (msg.size() > 10) ? stoi(msg.substr(10)) : 30;
-        send_to_relay("crash", to_string(myNodeID) + " " + to_string(secs));
-        string terminate_cmd = "sudo systemd-run --collect --quiet --unit=ameyaDB-chaos-"
-                             + to_string(myNodeID) + " " + CRASH_SCRIPT
-                             + " " + to_string(myNodeID) + " " + to_string(secs);
-        system(terminate_cmd.c_str());
-        return true;
-    }
-
+    fcntl(fd, F_SETFL, flags);   // back to blocking for the rest of the wire's life
     return true;
 }
 
-static void attach_reader_to_relay(int fd) {
-    string msg;
-    char c;
-    while (true) {
-        ssize_t n = read(fd, &c, 1);
-        if (n <= 0) return;          // relay wire broke
-        if (c == '\n') {
-            if (!handle_relay_msg(fd, msg)) return;
-            msg.clear();
-            continue;
-        }
-        msg += c;
-    }
-}
-
-// keeps connection between node & relay
-static void keep_relay_initiator_on_wire(string host, int port) {
-    while (true) {
-        int fd = initiate_to_relay(host, port);   // blocks until connected
-        relay_fd = fd;
-        send_to_relay("hello", "hello");
-        attach_reader_to_relay(fd); // blocks until relay wire breaks
-        relay_fd = -1;
-        close(fd);
-    }
-}
-
-// keeps connection between peers
-static void keep_initiator_on_wire(int peer_id) {
-    while (true) {
-
-        int fd = initiate_to_peer(peer_id);
-        my_fd_to[peer_id] = fd;
-
-        attach_reader_to_tcp_wire(peer_id);
-
-        int stale = fd;
-        my_fd_to[peer_id].compare_exchange_strong(stale, -1);
-        close(fd);
-    }
-}
-
+// tcp
 static void put_acceptor_on_wire(int peerFD) {
     set_keepalive(peerFD);
 
@@ -236,7 +142,6 @@ static void put_acceptor_on_wire(int peerFD) {
     my_fd_to[sender_id].compare_exchange_strong(stale, -1);
     close(peerFD);
 }
-
 void attach_reader_to_tcp_wire(int peer_id) {
     int peerFD = my_fd_to[peer_id].load();
     send_to_relay("wire", to_string(myNodeID) + " " + to_string(peer_id) + " up");
@@ -248,6 +153,146 @@ void attach_reader_to_tcp_wire(int peer_id) {
         else if (op == READ)  { if (!handle_read(peerFD))  break; }
     }
     send_to_relay("wire", to_string(myNodeID) + " " + to_string(peer_id) + " down");
+}
+
+// relay
+static bool handle_relay_msg(int fd, const string &msg) {
+    (void)fd;
+
+    // allow.SH
+    if (msg.rfind("connect ", 0) == 0) {
+        string peers = msg.substr(8);
+        string connect_cmd = "sudo " + string(ALLOW_SCRIPT) + " "
+                           + to_string(myNodeID) + " " + peers;
+        system(connect_cmd.c_str());
+        alive = true;
+        return true;
+    }
+
+    // crash.SH
+    if (msg.rfind("terminate", 0) == 0) {
+        int secs = (msg.size() > 10) ? stoi(msg.substr(10)) : 30;
+        send_to_relay("crash", to_string(myNodeID) + " " + to_string(secs));
+        string terminate_cmd = "sudo systemd-run --collect --quiet --unit=ameyaDB-chaos-"
+                             + to_string(myNodeID) + " " + CRASH_SCRIPT
+                             + " " + to_string(myNodeID) + " " + to_string(secs);
+        system(terminate_cmd.c_str());
+        return true;
+    }
+
+    return true;
+}
+static void attach_reader_to_relay(int fd) {
+    string msg;
+    char c;
+    while (true) {
+        ssize_t n = read(fd, &c, 1);
+        if (n <= 0) return;          // relay wire broke
+        if (c == '\n') {
+            if (!handle_relay_msg(fd, msg)) return;
+            msg.clear();
+            continue;
+        }
+        msg += c;
+    }
+}
+
+// constantly spams connection reqs
+static int initiate_to_relay(const string &host, int port) {
+    int backoff_ms = 100;
+
+    while (true) {
+        in_addr relay_ip{};
+        if (!resolve_ipv4(host, relay_ip)) {
+            sleep_for(milliseconds(backoff_ms));
+            backoff_ms = min(backoff_ms * 2, 3000);
+            continue;
+        }
+
+        int fd = socket(AF_INET, SOCK_STREAM, 0);
+        if (fd < 0) {
+            sleep_for(milliseconds(backoff_ms));
+            backoff_ms = min(backoff_ms * 2, 3000);
+            continue;
+        }
+
+        sockaddr_in addr{};
+        addr.sin_family = AF_INET;
+        addr.sin_port   = htons(port);
+        addr.sin_addr   = relay_ip;
+
+        // A stopped bastion swallows the SYN exactly like a DROP rule does, so
+        // an uncapped connect() would park here for ~2 minutes on every retry.
+        if (connect_with_timeout(fd, addr, 2000))
+            return fd;
+
+        close(fd);
+        sleep_for(milliseconds(backoff_ms));
+        backoff_ms = min(backoff_ms * 2, 3000);
+    }
+}
+static int initiate_to_peer(int peer_id) {
+    int backoff_ms = 100;
+    const int    peerPort = 8080 + peer_id;
+    const string host     = "node-" + to_string(peer_id) + "." + PEER_DOMAIN;
+
+    while (true) {
+        // Re-resolve every attempt. Route53 rewrites these records whenever
+        // terraform replaces an instance, and the TTL is 60s -- caching the
+        // address once at startup would pin us to a dead IP for good.
+        in_addr peer_ip{};
+        if (!resolve_ipv4(host, peer_ip)) {
+            sleep_for(milliseconds(backoff_ms));
+            backoff_ms = min(backoff_ms * 2, 3000);
+            continue;
+        }
+
+        // a socket that failed connect() is unusable -- make a fresh one each try
+        int fd = socket(AF_INET, SOCK_STREAM, 0);
+        if (fd < 0)
+            throw runtime_error("[initiate] socket failed: " + string(strerror(errno)));
+
+        sockaddr_in addr{};
+        addr.sin_family = AF_INET;
+        addr.sin_port   = htons(peerPort);
+        addr.sin_addr   = peer_ip;
+
+        if (connect_with_timeout(fd, addr, 2000)) {
+            set_keepalive(fd);
+            char msg[1 + sizeof(int)];
+            msg[0] = HELLO;
+            memcpy(&msg[1], &myNodeID, sizeof(myNodeID));
+            if (write(fd, msg, sizeof(msg)) == static_cast<ssize_t>(sizeof(msg)))
+                return fd;
+        }
+
+        close(fd);
+        sleep_for(milliseconds(backoff_ms));
+        backoff_ms = min(backoff_ms * 2, 3000);
+    }
+}
+static void keep_relay_initiator_on_wire(string host, int port) {
+    while (true) {
+        int fd = initiate_to_relay(host, port);   // blocks until connected
+        relay_fd = fd;
+        send_to_relay("hello", "hello");
+        attach_reader_to_relay(fd); // blocks until relay wire breaks
+        relay_fd = -1;
+        close(fd);
+    }
+}
+static void keep_initiator_on_wire(int peer_id) {
+    while (true) {
+
+        int fd = initiate_to_peer(peer_id);
+        my_fd_to[peer_id] = fd;
+
+        attach_reader_to_tcp_wire(peer_id);
+
+        int stale = fd;
+        my_fd_to[peer_id].compare_exchange_strong(stale, -1);
+        close(fd);
+    }
 }
 
 static void accept_4ever(int listener) {
