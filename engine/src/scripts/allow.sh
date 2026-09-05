@@ -1,4 +1,4 @@
-
+#!/bin/bash
 # ameyaDB-allow.sh -- who is this node allowed to reach?
 #
 #   ameyaDB-allow.sh <my_id> all    # everyone (also how you heal a partition)
@@ -17,7 +17,7 @@ ME=${1:?usage: ameyaDB-allow.sh <my_id> <all|none|digits>}
 ALLOWED=${2:?usage: ameyaDB-allow.sh <my_id> <all|none|digits>}
 
 # config
-RULE_LIST=AMEYADB=AMEYADB
+RULE_LIST=AMEYADB
 MESH=8080:8084
 DOMAIN=ameyadb.internal
 NUM_NODES=5

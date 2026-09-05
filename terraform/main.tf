@@ -103,6 +103,13 @@ resource "aws_security_group" "db_nodes" {
     cidr_blocks = ["10.0.0.0/16"]
   }
 
+  ingress {
+    from_port   = 7000
+    to_port     = 7000
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
   # Relay: nodes dial out to relay.py (listening on the bastion, port 9000)
   # to report status. Only needs to allow traffic from inside the VPC.
   ingress {
@@ -270,7 +277,7 @@ rm -rf /home/ec2-user/ameyaDB
 git clone --depth 1 https://github.com/uhhmeya/ameyaDB.git /home/ec2-user/ameyaDB
 mkdir -p /home/ec2-user/ameyaDB/engine/src/output/EXEC
 cd /home/ec2-user/ameyaDB/engine/src/server
-g++ -std=c++20 -pthread -o /home/ec2-user/ameyaDB/engine/src/output/EXEC/server main.cpp handlers.cpp walsnap.cpp threads.cpp -lclockbound
+g++ -std=c++20 -pthread -o /home/ec2-user/ameyaDB/engine/src/output/EXEC/server main.cpp handlers.cpp walsnap.cpp threads.cpp raft.cpp -lclockbound
 
 # The chaos scripts get copied OUT of the repo, not run from it. The repo sits
 # under /home/ec2-user, which ec2-user can write to freely -- and both scripts

@@ -1,13 +1,18 @@
 #include "../headers/globals.h"
 #include <unistd.h>
 #include <cstdint>
+#include <cstring>
 
 // imports
 void apply_entry(const string& k, const string& v);
 string apply_r(const string& k);
 
+// raft.cpp
+bool am_i_leader();
+int  who_is_leader();
 
-static constexpr xnt MAX_FIELD = 1u << 20;   // reject absurd lengths off the wire
+// msg too long
+static constexpr xnt MAX_FIELD = 1u << 20;
 
 // helpers
 static bool read_tcp(int client_fd, void* buf, size_t n) {
@@ -56,16 +61,31 @@ static optional<string> read_k(int client_fd) {
     return k;
 }
 
+static constexpr uint8_t WR_OK         = 1;
+static constexpr uint8_t WR_NOT_LEADER = 2;
+
+static bool write_status(int client_fd, uint8_t status, int leader_hint) {
+    char buf[1 + sizeof(int)];
+    buf[0] = static_cast<char>(status);
+    memcpy(&buf[1], &leader_hint, sizeof(leader_hint));
+    return write_tcp(client_fd, buf, sizeof(buf));
+}
+
 // handlers
 bool handle_write(int client_fd) {
+    // Drain the whole frame BEFORE the leader check. Bailing out early would
+    // leave the k/v bytes sitting in the stream and the next op byte we read
+    // would actually be part of this write -- permanent desync.
     auto kv = read_kv(client_fd);
     if (!kv) return false;
+
+    if (!am_i_leader())
+        return write_status(client_fd, WR_NOT_LEADER, who_is_leader());
 
     auto [k, v] = *kv;
     apply_entry(k, v);
 
-    uint8_t ack = 1;
-    return write_tcp(client_fd, &ack, sizeof(ack));
+    return write_status(client_fd, WR_OK, myNodeID);
 }
 bool handle_read(int client_fd) {
     auto k = read_k(client_fd);

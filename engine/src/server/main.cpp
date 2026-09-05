@@ -24,6 +24,7 @@ atomic<xnt> log_index{0};
 vector<atomic<int>> my_fd_to;
 atomic<int> relay_fd{-1};
 atomic alive{false};
+static mutex peer_write_mutex;
 
 // announce
 bool handle_write(int x);
@@ -34,10 +35,12 @@ void take_pics();
 xnt load_snap();
 void replay_wal(xnt x);
 void attach_reader_to_tcp_wire(int peer_id);
+void raft_init();
 
 static const string PEER_DOMAIN = "ameyadb.internal";
 static const string RELAY_IP = "10.0.100.70";
 constexpr int RELAY_PORT = 9000;
+constexpr int CLIENT_PORT = 7000;
 
 static const char *ALLOW_SCRIPT = "/usr/local/bin/ameyaDB-allow.sh";
 static const char *CRASH_SCRIPT = "/usr/local/bin/ameyaDB-crash.sh";
@@ -124,7 +127,7 @@ static bool connect_with_timeout(int fd, const sockaddr_in &addr, int timeout_ms
     return true;
 }
 
-// tcp
+// tcp peer
 static void put_acceptor_on_wire(int peerFD) {
     set_keepalive(peerFD);
 
@@ -153,6 +156,17 @@ void attach_reader_to_tcp_wire(int peer_id) {
         else if (op == READ)  { if (!handle_read(peerFD))  break; }
     }
     send_to_relay("wire", to_string(myNodeID) + " " + to_string(peer_id) + " down");
+}
+
+// tcp client
+static void serve_client(int fd) {
+    char op = 0;
+    while (read(fd, &op, 1) == 1) {
+        if      (op == WRITE) { if (!handle_write(fd)) break; }
+        else if (op == READ)  { if (!handle_read(fd))  break; }
+        else break;
+    }
+    close(fd);
 }
 
 // relay
@@ -295,13 +309,42 @@ static void keep_initiator_on_wire(int peer_id) {
     }
 }
 
+// peers
 static void accept_4ever(int listener) {
-
     // main thread parks here forever, accepting new peer connections
     while (true) {
         int peerFD = accept(listener, nullptr, nullptr);
         if (peerFD < 0) continue;
         thread([peerFD]() { put_acceptor_on_wire(peerFD); }).detach();
+    }
+}
+bool send_to_peer(int peer, const string &buf) {
+    // my_fd_to is empty until the `alive` gate opens -- indexing it before
+    // that is out of bounds, and this is reachable from raft's own thread.
+    if (peer < 0 || peer >= static_cast<int>(my_fd_to.size())) return false;
+
+    int fd = my_fd_to[peer].load();
+    if (fd < 0) return false;
+
+    lock_guard g(peer_write_mutex);
+
+    size_t sent = 0;
+    while (sent < buf.size()) {
+        ssize_t w = write(fd, buf.data() + sent, buf.size() - sent);
+        if (w <= 0) {
+            if (w < 0 && errno == EINTR) continue;
+            return false;
+        }
+        sent += static_cast<size_t>(w);
+    }
+    return true;
+}
+
+static void accept_clients_4ever(int listener) {
+    while (true) {
+        int fd = accept(listener, nullptr, nullptr);
+        if (fd < 0) continue;
+        thread([fd] { serve_client(fd); }).detach();
     }
 }
 
@@ -354,6 +397,7 @@ int main(int argc, char *argv[]) {
     xnt snap_idx = load_snap();
     truncate_wal(snap_idx);
     replay_wal(snap_idx);
+    raft_init();
 
     thread([] {
         take_pics();
@@ -361,6 +405,9 @@ int main(int argc, char *argv[]) {
 
     int myPort = 8080 + myNodeID;
     int listener = attach_listener_to_port(myPort);
+
+    int client_listener = attach_listener_to_port(CLIENT_PORT);
+    thread([client_listener] { accept_clients_4ever(client_listener); }).detach();
 
     for (int peer = myNodeID + 1; peer < NUM_NODES; ++peer) {
         thread([peer] {

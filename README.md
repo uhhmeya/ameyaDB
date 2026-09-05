@@ -11,11 +11,11 @@ during various raft edge cases
 6. Added tool that lets browser terminate node, control who the node connects to, & control when node comes back up.
 
 # Technical Details
-Found race where kernel could reuse a file-descriptor(FD) that my process still thought was in use, fixed by changing which method closes the FD
-Found race where follower could ACK a dead leader which hits a closed socket which crashes the follower. Fixed by ignoring SIGPIPE.
-Handled the mid-flush crash data loss edge case by pouring writes into a temp file then atomically renaming it
-Found race where crash recovery could re-order writes. Fixed it by flushing to WAL and assigning log index under one lock.
-Found that if you grab dirty keys when building the snap and a crash occurs, then there's a race window where a write can be applied without the key being marked dirty. (data loss)
+1. Found race where kernel could reuse a file-descriptor(FD) that my process still thought was in use, fixed by changing which method closes the FD
+2. Found race where follower could ACK a dead leader which hits a closed socket which crashes the follower. Fixed by ignoring SIGPIPE.
+3. Handled the mid-flush crash data loss edge case by pouring writes into a temp file then atomically renaming it
+4. Found race where crash recovery could re-order writes. Fixed it by flushing to WAL and assigning log index under one lock.
+5. Found that if you grab dirty keys when building the snap and a crash occurs, then there's a race window where a write can be applied without the key being marked dirty. (data loss)
 
 # usage
 1. download project & cd to it

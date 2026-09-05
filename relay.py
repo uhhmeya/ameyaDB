@@ -69,10 +69,18 @@ async def on_TCP(reader, writer):
 
 
 async def send_to_node(node, text):
-    writer = nodeFDtable[node]
-    writer.write((text + "\n").encode())
-    await writer.drain()
+    writer = nodeFDtable.get(node)
+    if writer is None:
+        log(f"node{node} not connected -- dropped: {text}")
+        return False
+    try:
+        writer.write((text + "\n").encode())
+        await writer.drain()
+    except (ConnectionError, OSError):
+        log(f"node{node} wire broke mid-send -- dropped: {text}")
+        return False
     log(f"node{node} <- {text}")
+    return True
 
 
 async def on_WS(websocket):

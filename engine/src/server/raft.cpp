@@ -1,7 +1,8 @@
 // raft.cpp
 #include "../headers/globals.h"
 #include "../headers/threads.h"
-
+#include <cstring>
+#include <cerrno>
 #include <fstream>
 #include <iostream>
 #include <vector>
@@ -109,7 +110,6 @@ static void put(string& b, const void* p, size_t n) {
     b.append(static_cast<const char*>(p), n);
 }
 
-
 static string build_vote_request(xnt log_len, xnt last_term) {
     string b;
     char op = REQUEST_VOTE;
@@ -120,7 +120,6 @@ static string build_vote_request(xnt log_len, xnt last_term) {
     put(b, &last_term, sizeof(last_term));
     return b;
 }
-
 
 void election_timer_loop() {
 
@@ -157,7 +156,7 @@ void election_timer_loop() {
     }
 }
 
-void raft_on_append_entries(int leader_id, xnt term) {
+void on_AE(int leader_id, xnt term) {
     string log;
     {
         lock_guard g(raft_mutex);
@@ -178,10 +177,18 @@ void raft_on_append_entries(int leader_id, xnt term) {
     print(log);
 }
 
-
-// called by whoever hears from a live leader (AppendEntries, slide 5/9)
-void raft_note_leader_alive(int leader_id) {
+void on_HB(int leader_id) {
     lock_guard g(raft_mutex);
     leader = leader_id;
     last_heard_ms = now_ms();
+}
+
+bool am_i_leader() {
+    lock_guard g(raft_mutex);
+    return role == LEADER;
+}
+
+int who_is_leader() {
+    lock_guard g(raft_mutex);
+    return leader;   // -1 while unknown (election in progress)
 }
