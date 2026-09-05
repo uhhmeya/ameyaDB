@@ -1,6 +1,5 @@
 import asyncio
 import websockets
-import os
 import json
 from datetime import datetime
 
@@ -25,19 +24,20 @@ def log(msg):
     print(f"{datetime.now().strftime('%H:%M:%S')} {msg}")
 
 async def run_test():
-    proc = await asyncio.create_subprocess_exec("python3", "test.py",)
+    proc = await asyncio.create_subprocess_exec("python3", "test.py")
     returncode = await proc.wait()
     log(f"test.py exited with code {returncode}")
 
 async def send_to_browser(msg):
-    if browser is None:
-        log(f"FATAL: No browser connected relay dropped msg : {msg}")
-        os._exit(1)
+    # snapshot it -- on_WS's finally can clear `browser` between the check
+    # and the send
+    b = browser
+    if b is None:
+        return                  # nobody watching: drop the frame, stay alive
     try:
-        await browser.send(msg)
+        await b.send(msg)
     except websockets.exceptions.ConnectionClosed:
-        log("FATAL: browser connection closed mid-send")
-        os._exit(1)
+        pass                    # browser vanished mid-send; on_WS clears it
 
 async def on_TCP(reader, writer):
     node_id = None
@@ -60,13 +60,11 @@ async def on_TCP(reader, writer):
 
             await send_to_browser(msg)
 
-
     finally:
         if nodeFDtable.get(node_id) is writer:
             del nodeFDtable[node_id]
             log(f"node{node_id} wire broke")
         writer.close()
-
 
 async def send_to_node(node, text):
     writer = nodeFDtable.get(node)
@@ -82,14 +80,12 @@ async def send_to_node(node, text):
     log(f"node{node} <- {text}")
     return True
 
-
 async def on_WS(websocket):
     global browser
-    conn_id = websocket.remote_address[1]
 
     if browser is None:
         browser = websocket
-        log(f"relay & browser are connected")
+        log("relay & browser are connected")
 
     try:
         async for raw in websocket:
@@ -103,11 +99,12 @@ async def on_WS(websocket):
                 asyncio.create_task(run_test())
 
     except websockets.exceptions.ConnectionClosed:
-        log(f"WS client ({conn_id}) disconnected")
+        pass
 
     finally:
         if browser is websocket:
             browser = None
+            log("browser detached -- telemetry dropped until it returns")
 
 async def main():
 
@@ -116,11 +113,17 @@ async def main():
         while browser is None:
             await asyncio.sleep(0.2)
 
-        # calls on_TCP() everytime node connects to relay
-        tcp_server = await asyncio.start_server(on_TCP, TCP_HOST, TCP_PORT)
+        # If this throws, the websocket server closes with it and :8765 starts
+        # refusing connections -- which looks exactly like "the relay died"
+        # from the browser side. Say why before going.
+        try:
+            tcp_server = await asyncio.start_server(on_TCP, TCP_HOST, TCP_PORT)
+        except OSError as e:
+            log(f"FATAL: could not bind :{TCP_PORT} -- {e}")
+            raise
+
         async with tcp_server:
             await tcp_server.serve_forever()
-
 
 if __name__ == "__main__":
     asyncio.run(main())
