@@ -88,7 +88,6 @@ echo "open this link to continue : http://localhost:5173"
 
 # order matters: relay.py keeps port 9000 closed until the browser attaches,
 # and nodes only start after that — a node can never reach a browserless relay.
-echo "power-cycling bastion..."
 settle $BASTION_ID
 # always stop -> start (never just "start if stopped"). A stop kills every
 # process on the box, so this guarantees no leftover relay.py -- no pkill
@@ -99,7 +98,6 @@ if [[ "$BASTION_STATE" == "running" ]]; then
   aws ec2 stop-instances --instance-ids $BASTION_ID >/dev/null || fail "stop-instances (bastion) failed"
   aws ec2 wait instance-stopped --instance-ids $BASTION_ID || fail "bastion never stopped"
 fi
-echo "(cold boot takes a couple minutes)"
 aws ec2 start-instances --instance-ids $BASTION_ID >/dev/null || fail "start-instances (bastion) failed"
 # instance-running + the ssh retry loop below is enough for the bastion --
 # waiting for full status checks would add minutes for nothing
