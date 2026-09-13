@@ -374,6 +374,7 @@ int main(int argc, char *argv[]) {
 
     while (!alive.load())
         sleep_for(seconds(2));
+    send_to_relay("awake", "awake");
 
     // my_fd_to = (-1,-1,-1,-1,-1)
     my_fd_to = vector<atomic<int>>(NUM_NODES);

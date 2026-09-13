@@ -18,6 +18,9 @@ WS_PORT = 8765
 # browser is not connected yet
 browser = None
 
+# test.py dials in as a second websocket, after the browser
+test = None
+
 nodeFDtable = {}
 
 def log(msg):
@@ -36,6 +39,14 @@ async def send_to_browser(msg):
     except websockets.exceptions.ConnectionClosed:
         pass
 
+async def tell_test(msg):
+    if test is None:
+        return
+    try:
+        await test.send(json.dumps(msg))
+    except websockets.exceptions.ConnectionClosed:
+        pass
+
 async def on_TCP(reader, writer):
     node_id = None
     try:
@@ -49,11 +60,19 @@ async def on_TCP(reader, writer):
             if not msg:
                 continue
 
-            # who are we talking to?
+            data = json.loads(msg)
+
+            # who are we talking to? a node reaches us before it is allowed to
+            # do anything, so first contact means it is sitting there born dead
             if node_id is None:
-                node_id = json.loads(msg)["node"]
+                node_id = data["node"]
                 nodeFDtable[node_id] = writer
-                log(f"node{node_id} is idle and connected to relay")
+                log(f"node{node_id} born dead")
+                await tell_test({"born_dead": node_id})
+
+            # it says this once a connect message has flipped its alive flag
+            if data.get("type") == "awake":
+                log(f"node{node_id} up")
 
             await send_to_browser(msg)
 
@@ -78,11 +97,13 @@ async def send_to_node(node, text):
     return True
 
 async def on_WS(websocket):
-    global browser
+    global browser, test
 
     if browser is None:
         browser = websocket
         log("relay & browser are connected")
+    else:
+        test = websocket   # the browser is always first in, so this one is test.py
 
     try:
         async for raw in websocket:
@@ -102,6 +123,8 @@ async def on_WS(websocket):
         if browser is websocket:
             browser = None
             log("browser detached -- telemetry dropped until it returns")
+        if test is websocket:
+            test = None
 
 # connect to browser
 # call on_TCP when node connects
@@ -114,6 +137,7 @@ async def main():
 
         # accept node connections
         async with tcp_server:
+            tcp_server = await asyncio.start_server(on_TCP, TCP_HOST, TCP_PORT)
             await tcp_server.serve_forever()
 
 if __name__ == "__main__":
