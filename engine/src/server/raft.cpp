@@ -1,6 +1,5 @@
-// raft.cpp
-#include "../headers/globals.h"
-#include "../headers/threads.h"
+
+#include "../headers/globals.h"#include "../headers/threads.h"
 #include <cstring>
 #include <cerrno>
 #include <fstream>
@@ -11,6 +10,7 @@
 #include <thread>
 #include <unistd.h>
 #include <fcntl.h>
+#include <threads.h>
 
 enum Raft_Role {
     FOLLOWER,

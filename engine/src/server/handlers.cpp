@@ -61,8 +61,9 @@ static optional<string> read_k(int client_fd) {
     return k;
 }
 
-static constexpr uint8_t WR_OK         = 1;
-static constexpr uint8_t WR_NOT_LEADER = 2;
+static constexpr uint8_t I_AM_LEADER     = 1;
+static constexpr uint8_t I_AM_NOT_LEADER = 2;
+static constexpr uint8_t IDK             = 3;
 
 static bool write_status(int client_fd, uint8_t status, int leader_hint) {
     char buf[1 + sizeof(int)];
@@ -73,19 +74,20 @@ static bool write_status(int client_fd, uint8_t status, int leader_hint) {
 
 // handlers
 bool handle_write(int client_fd) {
-    // Drain the whole frame BEFORE the leader check. Bailing out early would
-    // leave the k/v bytes sitting in the stream and the next op byte we read
-    // would actually be part of this write -- permanent desync.
     auto kv = read_kv(client_fd);
     if (!kv) return false;
 
-    if (!am_i_leader())
-        return write_status(client_fd, WR_NOT_LEADER, who_is_leader());
+    if (!am_i_leader()) {
+        int leader_id = who_is_leader();
+        if (leader_id == -1)
+            return write_status(client_fd, IDK, -1);
+        return write_status(client_fd, I_AM_NOT_LEADER, leader_id);
+    }
 
     auto [k, v] = *kv;
     apply_entry(k, v);
 
-    return write_status(client_fd, WR_OK, myNodeID);
+    return write_status(client_fd, I_AM_LEADER, myNodeID);
 }
 bool handle_read(int client_fd) {
     auto k = read_k(client_fd);

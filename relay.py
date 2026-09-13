@@ -103,20 +103,16 @@ async def on_WS(websocket):
             browser = None
             log("browser detached -- telemetry dropped until it returns")
 
+# connect to browser
+# call on_TCP when node connects
 async def main():
 
-    # wait until browser & relay are connected
+    # connect to browser
     async with websockets.serve(on_WS, WS_HOST, WS_PORT):
         while browser is None:
             await asyncio.sleep(0.2)
 
-        # throws error if zombie relay is already connected to browser
-        try:
-            tcp_server = await asyncio.start_server(on_TCP, TCP_HOST, TCP_PORT)
-        except OSError as e:
-            log(f"FATAL: could not bind :{TCP_PORT} -- {e}")
-            raise
-
+        # accept node connections
         async with tcp_server:
             await tcp_server.serve_forever()
 

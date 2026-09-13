@@ -1,74 +1,50 @@
 import asyncio
 import json
-import time
 from datetime import datetime
 
 import websockets
 
-import client as clientlib
+import client
 
-TEST_TO_RELAY_WS = "ws://127.0.0.1:8765"
+RELAY_WS_URL = "ws://127.0.0.1:8765"
 
 NUM_NODES     = 5
 NUM_CLIENTS   = 10
-DOWNTIME_SECS = 15     # how long a terminated node stays down
-REJOIN_GRACE  = 8      # crash.sh needs a beat past its sleep to restart + redial
-SETTLE_SECS   = 20     # let the cluster re-elect and clients re-find the leader
-TICK_SECS     = 2
+DOWNTIME_SECS = 15   # how long a terminated node stays down
+REJOIN_GRACE  = 8    # crash.sh needs a beat past its sleep to restart + redial
+SETTLE_SECS   = 20   # let the cluster re-elect and clients re-find the leader
 
-ws   = None
-pool = None
-
+relay_ws = None
 
 def log(msg):
     print(f"{datetime.now().strftime('%H:%M:%S')} {msg}", flush=True)
 
-async def send(node, text):
-    await ws.send(json.dumps({"to": node, "msg": text}))
+# sends to relay. relay forwards to node
+async def send_to_node(node_id, text):
+    await relay_ws.send(json.dumps({"to": node_id, "msg": text}))
 
 
-async def connect_all():
-    for n in range(NUM_NODES):
-        await send(n, "connect all")
+async def wake_whole_cluster():
+    for node_id in range(NUM_NODES):
+        await send_to_node(node_id, "connect all")
 
 
-async def stats_ticker():
-    prev, last = 0, time.monotonic()
-    try:
-        while True:
-            await asyncio.sleep(TICK_SECS)
-            snap = pool.stats.snapshot()
-            now  = time.monotonic()
-
-            delta = snap["committed"] - prev
-            rate  = delta / (now - last)
-            prev, last = snap["committed"], now
-
-            leaders = ", ".join(f"n{k}={v}" for k, v in sorted(snap["by_leader"].items())) or "-"
-            log(f"[stats] +{delta:<5d} ({rate:6.1f}/s)  total={snap['committed']:<7d} "
-                f"redirect={snap['redirects']:<6d} connerr={snap['conn_errs']:<5d} "
-                f"failed={snap['failed']:<5d} [{leaders}]")
-    except asyncio.CancelledError:
-        pass
-
-
-async def scenario():
+async def chaos_scenario():
     log("[chaos] waking cluster")
-    await connect_all()
+    await wake_whole_cluster()
     await asyncio.sleep(10)
 
-    log(f"[chaos] starting {NUM_CLIENTS} clients, writes flow from here on")
-    pool.start()
+    log(f"[chaos] starting {NUM_CLIENTS} clients -- writes flow from here on")
+    client.start_clients(NUM_CLIENTS)
     await asyncio.sleep(10)          # baseline before anything breaks
 
-    for n in range(NUM_NODES):
-        log(f"[chaos] ---- terminating node {n} for {DOWNTIME_SECS}s ----")
-        await send(n, f"terminate {DOWNTIME_SECS}")
-
+    for node_id in range(NUM_NODES):
+        log(f"[chaos] ---- terminating node {node_id} for {DOWNTIME_SECS}s ----")
+        await send_to_node(node_id, f"terminate {DOWNTIME_SECS}")
         await asyncio.sleep(DOWNTIME_SECS + REJOIN_GRACE)
 
-        log(f"[chaos] node {n} should be back -- re-arming whole cluster")
-        await connect_all()
+        log(f"[chaos] node {node_id} should be back -- re-arming whole cluster")
+        await wake_whole_cluster()
         await asyncio.sleep(SETTLE_SECS)
 
     log("[chaos] all nodes cycled, draining")
@@ -76,25 +52,14 @@ async def scenario():
 
 
 async def main():
-    global ws, pool
-    pool = clientlib.ClientPool(num_clients=NUM_CLIENTS)
-
-    async with websockets.connect(TEST_TO_RELAY_WS) as conn:
-        ws = conn
-        ticker = asyncio.create_task(stats_ticker())
+    global relay_ws
+    async with websockets.connect(RELAY_WS_URL) as conn:
+        relay_ws = conn
         try:
-            await scenario()
+            await chaos_scenario()
         finally:
-            ticker.cancel()
-            await asyncio.gather(ticker, return_exceptions=True)
-            pool.shutdown()
-
-    f = pool.stats.snapshot()
-    log("=" * 72)
-    log(f"[final] committed={f['committed']}  failed={f['failed']}  "
-        f"redirects={f['redirects']}  conn_errs={f['conn_errs']}")
-    log(f"[final] commits by node: {f['by_leader'] or '{}'}")
-    log("=" * 72)
+            client.stop_clients()
+    log("[chaos] done")
 
 
 if __name__ == "__main__":
