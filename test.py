@@ -65,8 +65,6 @@ async def scenario():
         log(f"[chaos] ---- terminating node {n} for {DOWNTIME_SECS}s ----")
         await send(n, f"terminate {DOWNTIME_SECS}")
 
-        # Bare "terminate" would default to 30s inside handle_relay_msg
-        # (msg.size() > 10 is false for the 9-char word), so always pass it.
         await asyncio.sleep(DOWNTIME_SECS + REJOIN_GRACE)
 
         log(f"[chaos] node {n} should be back -- re-arming whole cluster")

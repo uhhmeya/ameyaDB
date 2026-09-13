@@ -1,12 +1,9 @@
 #!/usr/bin/env bash
-# dooby.sh — bring ameyaDB up (frontend + relay + nodes), stop instances on ctrl-C.
+
 #   ./dooby.sh           start stopped instances (fast, keeps disks + IPs)
 #   ./dooby.sh --fresh   terraform-replace all 5 nodes (slow, clean slate)
-set -uo pipefail
 
-# the whole script lives in one { } group so bash parses the entire file up
-# front -- saving/replacing this file while a run is live can then never
-# corrupt the running instance (bash otherwise streams scripts from disk)
+set -uo pipefail
 {
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -14,7 +11,6 @@ TF_DIR="$ROOT_DIR/terraform"
 KEY="$HOME/.ssh/ameyaDB"
 REPO="ameyaDB"
 export AWS_REGION="${AWS_REGION:-us-east-1}"
-STOP_BASTION="${STOP_BASTION:-0}"   # 1 = also stop the bastion (t3.micro) on exit
 
 FRESH=0; [[ "${1:-}" == "--fresh" ]] && FRESH=1
 NODE_IDS=""; BASTION_ID=""; BASTION_IP=""
@@ -34,9 +30,7 @@ cleanup() {
   [[ "$CLEANED" == 1 ]] && return; CLEANED=1
   echo ""
   kill_tree "$FRONTEND_PID"; kill_tree "$RELAY_PID"; rm -f "$RELAY_LOG"
-  local ids="$NODE_IDS"
-  [[ "$STOP_BASTION" == 1 ]] && ids="$ids $BASTION_ID"
-  ids="$(echo "$ids" | xargs)"
+  local ids="$(echo "$NODE_IDS $BASTION_ID" | xargs)"   # always stop bastion too -- no idle billing between runs
   if [[ -z "$ids" ]]; then
     echo "!! no instance ids resolved — nothing stopped, check the AWS console"
   elif aws ec2 stop-instances --instance-ids $ids >/dev/null; then
@@ -94,11 +88,18 @@ echo "open this link to continue : http://localhost:5173"
 
 # order matters: relay.py keeps port 9000 closed until the browser attaches,
 # and nodes only start after that — a node can never reach a browserless relay.
-echo "starting relay..."
+echo "power-cycling bastion..."
 settle $BASTION_ID
+# always stop -> start (never just "start if stopped"). A stop kills every
+# process on the box, so this guarantees no leftover relay.py -- no pkill
+# needed -- and it's the same EIP either way, so BASTION_IP never changes.
 BASTION_STATE="$(aws ec2 describe-instances --instance-ids $BASTION_ID \
   --query 'Reservations[].Instances[].State.Name' --output text)"
-[[ "$BASTION_STATE" != "running" ]] && echo "(bastion was stopped — cold boot takes a couple minutes)"
+if [[ "$BASTION_STATE" == "running" ]]; then
+  aws ec2 stop-instances --instance-ids $BASTION_ID >/dev/null || fail "stop-instances (bastion) failed"
+  aws ec2 wait instance-stopped --instance-ids $BASTION_ID || fail "bastion never stopped"
+fi
+echo "(cold boot takes a couple minutes)"
 aws ec2 start-instances --instance-ids $BASTION_ID >/dev/null || fail "start-instances (bastion) failed"
 # instance-running + the ssh retry loop below is enough for the bastion --
 # waiting for full status checks would add minutes for nothing
@@ -108,7 +109,6 @@ for i in $(seq 1 40); do
   [[ "$i" == 40 ]] && { ssh_bastion true; fail "bastion sshd never came up"; }
   sleep 2
 done
-ssh_bastion "pkill -f relay.py" >/dev/null 2>&1
 (
   ssh -tt -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
       -i "$KEY" "ec2-user@$BASTION_IP" "cd $REPO && git pull --quiet && exec python3 -u relay.py"

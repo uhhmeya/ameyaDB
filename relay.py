@@ -29,15 +29,12 @@ async def run_test():
     log(f"test.py exited with code {returncode}")
 
 async def send_to_browser(msg):
-    # snapshot it -- on_WS's finally can clear `browser` between the check
-    # and the send
-    b = browser
-    if b is None:
-        return                  # nobody watching: drop the frame, stay alive
+    if browser is None:
+        return
     try:
-        await b.send(msg)
+        await browser.send(msg)
     except websockets.exceptions.ConnectionClosed:
-        pass                    # browser vanished mid-send; on_WS clears it
+        pass
 
 async def on_TCP(reader, writer):
     node_id = None
@@ -108,14 +105,12 @@ async def on_WS(websocket):
 
 async def main():
 
-    # browser must connect to relay first
+    # wait until browser & relay are connected
     async with websockets.serve(on_WS, WS_HOST, WS_PORT):
         while browser is None:
             await asyncio.sleep(0.2)
 
-        # If this throws, the websocket server closes with it and :8765 starts
-        # refusing connections -- which looks exactly like "the relay died"
-        # from the browser side. Say why before going.
+        # throws error if zombie relay is already connected to browser
         try:
             tcp_server = await asyncio.start_server(on_TCP, TCP_HOST, TCP_PORT)
         except OSError as e:

@@ -16,29 +16,12 @@ during various raft edge cases
 3. Handled the mid-flush crash data loss edge case by pouring writes into a temp file then atomically renaming it
 4. Found race where crash recovery could re-order writes. Fixed it by flushing to WAL and assigning log index under one lock.
 5. Found that if you grab dirty keys when building the snap and a crash occurs, then there's a race window where a write can be applied without the key being marked dirty. (data loss)
+6. Found that terminating a process is not enough to simulate crash since the kernel cleanly closes sockets & FINs every peer. Fixed by jumping an IPTABLES chain off both INPUT & OUTPUT hooks to drop mesh traffic before the kill, destroying FIN/RST packets & Requiring the nodes to infer death from timeout – correctly simulating real crash behavior
 
 # usage
 1. download project & cd to it
 2. ameyaDB % chmod +x dooby.sh && ./dooby.sh
 3. that's it :)
-
-# walsnap.cpp
-- **`apply_entry`**
-  - write
-- **`apply_r`**
-  - read
-- **`ensure_wal_is_open`**
-- **`remove_temp_snap`**
-  - remove temp snap on reboot
-- **`truncate_wal`**
-  - truncate wal
-- **`take_pics`**
-  - create snapshots
-- **`load_snap`**
-  - load snap into DB
-- **`replay_wal`**
-  - replay wal entry not covered by snap
-- **`get_last_log_entry`**
 
 # Why is my IDE not recognizing the CPP files?
 1. run `cmake -S . -B build` from `engine\`
