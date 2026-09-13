@@ -136,8 +136,8 @@ async def main():
             await asyncio.sleep(0.2)
 
         # accept node connections
+        tcp_server = await asyncio.start_server(on_TCP, TCP_HOST, TCP_PORT)
         async with tcp_server:
-            tcp_server = await asyncio.start_server(on_TCP, TCP_HOST, TCP_PORT)
             await tcp_server.serve_forever()
 
 if __name__ == "__main__":
