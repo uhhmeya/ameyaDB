@@ -1,0 +1,916 @@
+[1;32mameyaDB-node.amazon-ebs.node: output will be in this color.[0m
+
+[1;32m==> ameyaDB-node.amazon-ebs.node: Prevalidating any provided VPC information[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Prevalidating AMI Name: ameyaDB-node-1787335547[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Found Image ID: ami-0a527f352691073f2[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Creating temporary keypair: packer_6a88937b-3f9d-14fd-c5bf-557d996d93ff[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Creating temporary security group for this instance: packer_6a88937c-c85e-cf4d-755e-0e8359b7e60e[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Authorizing access to port 22 from [0.0.0.0/0] in the temporary security groups...[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Launching a source AWS instance...[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Instance ID: i-0e6de2a456069e369[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Waiting for instance (i-0e6de2a456069e369) to become ready...[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Using SSH communicator to connect: 32.197.191.184[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Waiting for SSH to become available...[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Connected to SSH![0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Provisioning with shell script: /var/folders/z7/kkbv39zn0vd4tp3678fm0w5r0000gn/T/packer-shell3621042189[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + sudo yum update -y[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Loaded plugins: extras_suggestions, langpacks, priorities, update-motd[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: Existing lock /var/run/yum.pid: another copy is running as pid 3130.[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: Another app is currently holding the yum lock; waiting for it to exit...[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   The other application is: yum[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Memory :  36 M RSS (437 MB VSZ)[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Started: Fri Aug 21 18:06:21 2026 - 00:06 ago[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     State  : Running, pid: 3130[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: Another app is currently holding the yum lock; waiting for it to exit...[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   The other application is: yum[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Memory :  40 M RSS (442 MB VSZ)[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Started: Fri Aug 21 18:06:21 2026 - 00:08 ago[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     State  : Uninterruptible, pid: 3130[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: Another app is currently holding the yum lock; waiting for it to exit...[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   The other application is: yum[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Memory : 150 M RSS (552 MB VSZ)[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Started: Fri Aug 21 18:06:21 2026 - 00:10 ago[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     State  : Running, pid: 3130[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: Another app is currently holding the yum lock; waiting for it to exit...[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   The other application is: yum[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Memory : 195 M RSS (597 MB VSZ)[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Started: Fri Aug 21 18:06:21 2026 - 00:12 ago[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     State  : Sleeping, pid: 3130[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: Another app is currently holding the yum lock; waiting for it to exit...[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   The other application is: yum[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Memory : 206 M RSS (625 MB VSZ)[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Started: Fri Aug 21 18:06:21 2026 - 00:14 ago[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     State  : Running, pid: 3130[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: Another app is currently holding the yum lock; waiting for it to exit...[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   The other application is: yum[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Memory : 203 M RSS (621 MB VSZ)[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Started: Fri Aug 21 18:06:21 2026 - 00:16 ago[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     State  : Uninterruptible, pid: 3130[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: Another app is currently holding the yum lock; waiting for it to exit...[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   The other application is: yum[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Memory : 203 M RSS (621 MB VSZ)[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Started: Fri Aug 21 18:06:21 2026 - 00:18 ago[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     State  : Running, pid: 3130[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: Another app is currently holding the yum lock; waiting for it to exit...[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   The other application is: yum[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Memory : 203 M RSS (621 MB VSZ)[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Started: Fri Aug 21 18:06:21 2026 - 00:20 ago[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     State  : Running, pid: 3130[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: Another app is currently holding the yum lock; waiting for it to exit...[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   The other application is: yum[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Memory : 203 M RSS (621 MB VSZ)[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Started: Fri Aug 21 18:06:21 2026 - 00:22 ago[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     State  : Running, pid: 3130[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: Another app is currently holding the yum lock; waiting for it to exit...[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   The other application is: yum[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Memory : 203 M RSS (621 MB VSZ)[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Started: Fri Aug 21 18:06:21 2026 - 00:24 ago[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     State  : Running, pid: 3130[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: Another app is currently holding the yum lock; waiting for it to exit...[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   The other application is: yum[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Memory : 203 M RSS (621 MB VSZ)[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Started: Fri Aug 21 18:06:21 2026 - 00:26 ago[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     State  : Sleeping, pid: 3130[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: Another app is currently holding the yum lock; waiting for it to exit...[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   The other application is: yum[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Memory : 203 M RSS (621 MB VSZ)[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Started: Fri Aug 21 18:06:21 2026 - 00:28 ago[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     State  : Sleeping, pid: 3130[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: Another app is currently holding the yum lock; waiting for it to exit...[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   The other application is: yum[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Memory : 203 M RSS (621 MB VSZ)[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Started: Fri Aug 21 18:06:21 2026 - 00:30 ago[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     State  : Sleeping, pid: 3130[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: Another app is currently holding the yum lock; waiting for it to exit...[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   The other application is: yum[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Memory : 203 M RSS (621 MB VSZ)[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Started: Fri Aug 21 18:06:21 2026 - 00:32 ago[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     State  : Sleeping, pid: 3130[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Resolving Dependencies[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: --> Running transaction check[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package aws-cfn-bootstrap.noarch 0:2.0-38.amzn2 will be updated[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package aws-cfn-bootstrap.noarch 0:2.0-40.amzn2 will be an update[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package dhclient.x86_64 12:4.2.5-79.amzn2.1.5 will be updated[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package dhclient.x86_64 12:4.2.5-79.amzn2.1.6 will be an update[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package dhcp-common.x86_64 12:4.2.5-79.amzn2.1.5 will be updated[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package dhcp-common.x86_64 12:4.2.5-79.amzn2.1.6 will be an update[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package dhcp-libs.x86_64 12:4.2.5-79.amzn2.1.5 will be updated[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package dhcp-libs.x86_64 12:4.2.5-79.amzn2.1.6 will be an update[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package ec2-hibinit-agent.noarch 0:1.0.10-2.amzn2 will be updated[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package ec2-hibinit-agent.noarch 0:1.0.11-1.amzn2 will be an update[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package kernel.x86_64 0:4.14.355-284.741.amzn2 will be installed[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package krb5-devel.x86_64 0:1.15.1-55.amzn2.2.9 will be updated[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package krb5-devel.x86_64 0:1.15.1-55.amzn2.2.10 will be an update[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package krb5-libs.x86_64 0:1.15.1-55.amzn2.2.9 will be updated[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package krb5-libs.x86_64 0:1.15.1-55.amzn2.2.10 will be an update[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package libkadm5.x86_64 0:1.15.1-55.amzn2.2.9 will be updated[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package libkadm5.x86_64 0:1.15.1-55.amzn2.2.10 will be an update[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package libnghttp2.x86_64 0:1.41.0-1.amzn2.0.6 will be updated[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package libnghttp2.x86_64 0:1.52.0-1.amzn2.0.1 will be an update[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package libpng.x86_64 2:1.5.13-8.amzn2.0.8 will be updated[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package libpng.x86_64 2:1.5.13-8.amzn2.0.9 will be an update[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package libxml2.x86_64 0:2.9.1-6.amzn2.5.24 will be updated[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package libxml2.x86_64 0:2.9.1-6.amzn2.5.26 will be an update[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package libxml2-python.x86_64 0:2.9.1-6.amzn2.5.24 will be updated[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package libxml2-python.x86_64 0:2.9.1-6.amzn2.5.26 will be an update[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package microcode_ctl.x86_64 2:2.1-47.amzn2.4.26 will be updated[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package microcode_ctl.x86_64 2:2.1-47.amzn2.4.27 will be an update[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package nss.x86_64 0:3.90.0-2.amzn2.0.2 will be updated[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package nss.x86_64 0:3.90.0-2.amzn2.0.3 will be an update[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package nss-sysinit.x86_64 0:3.90.0-2.amzn2.0.2 will be updated[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package nss-sysinit.x86_64 0:3.90.0-2.amzn2.0.3 will be an update[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package nss-tools.x86_64 0:3.90.0-2.amzn2.0.2 will be updated[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package nss-tools.x86_64 0:3.90.0-2.amzn2.0.3 will be an update[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package perl.x86_64 4:5.16.3-299.amzn2.0.3 will be updated[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package perl.x86_64 4:5.16.3-299.amzn2.0.4 will be an update[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package perl-HTTP-Tiny.noarch 0:0.033-3.amzn2.0.1 will be updated[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package perl-HTTP-Tiny.noarch 0:0.033-3.amzn2.0.2 will be an update[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package perl-Pod-Escapes.noarch 1:1.04-299.amzn2.0.3 will be updated[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package perl-Pod-Escapes.noarch 1:1.04-299.amzn2.0.4 will be an update[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package perl-Storable.x86_64 0:2.45-3.amzn2.0.2 will be updated[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package perl-Storable.x86_64 0:2.45-3.amzn2.0.3 will be an update[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package perl-libs.x86_64 4:5.16.3-299.amzn2.0.3 will be updated[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package perl-libs.x86_64 4:5.16.3-299.amzn2.0.4 will be an update[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package perl-macros.x86_64 4:5.16.3-299.amzn2.0.3 will be updated[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package perl-macros.x86_64 4:5.16.3-299.amzn2.0.4 will be an update[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package python-urllib3.noarch 0:1.25.9-1.amzn2.0.9 will be updated[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package python-urllib3.noarch 0:1.25.9-1.amzn2.0.10 will be an update[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package system-release.x86_64 1:2-17.amzn2 will be updated[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package system-release.x86_64 1:2-18.amzn2 will be an update[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package tzdata.noarch 0:2026a-1.amzn2.0.1 will be updated[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package tzdata.noarch 0:2026c-1.amzn2.0.1 will be an update[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package unzip.x86_64 0:6.0-57.amzn2.0.1 will be updated[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ---> Package unzip.x86_64 0:6.0-57.amzn2.0.2 will be an update[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: --> Finished Dependency Resolution[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Dependencies Resolved[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ================================================================================[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  Package              Arch      Version                     Repository     Size[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ================================================================================[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Installing:[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  kernel               x86_64    4.14.355-284.741.amzn2      amzn2-core     21 M[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Updating:[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  aws-cfn-bootstrap    noarch    2.0-40.amzn2                amzn2-core    229 k[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  dhclient             x86_64    12:4.2.5-79.amzn2.1.6       amzn2-core    287 k[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  dhcp-common          x86_64    12:4.2.5-79.amzn2.1.6       amzn2-core    177 k[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  dhcp-libs            x86_64    12:4.2.5-79.amzn2.1.6       amzn2-core    133 k[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  ec2-hibinit-agent    noarch    1.0.11-1.amzn2              amzn2-core     18 k[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  krb5-devel           x86_64    1.15.1-55.amzn2.2.10        amzn2-core    274 k[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  krb5-libs            x86_64    1.15.1-55.amzn2.2.10        amzn2-core    805 k[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  libkadm5             x86_64    1.15.1-55.amzn2.2.10        amzn2-core    181 k[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  libnghttp2           x86_64    1.52.0-1.amzn2.0.1          amzn2-core     81 k[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  libpng               x86_64    2:1.5.13-8.amzn2.0.9        amzn2-core    213 k[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  libxml2              x86_64    2.9.1-6.amzn2.5.26          amzn2-core    663 k[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  libxml2-python       x86_64    2.9.1-6.amzn2.5.26          amzn2-core    248 k[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  microcode_ctl        x86_64    2:2.1-47.amzn2.4.27         amzn2-core    5.0 M[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  nss                  x86_64    3.90.0-2.amzn2.0.3          amzn2-core    897 k[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  nss-sysinit          x86_64    3.90.0-2.amzn2.0.3          amzn2-core     67 k[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  nss-tools            x86_64    3.90.0-2.amzn2.0.3          amzn2-core    552 k[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  perl                 x86_64    4:5.16.3-299.amzn2.0.4      amzn2-core    8.0 M[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  perl-HTTP-Tiny       noarch    0.033-3.amzn2.0.2           amzn2-core     39 k[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  perl-Pod-Escapes     noarch    1:1.04-299.amzn2.0.4        amzn2-core     52 k[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  perl-Storable        x86_64    2.45-3.amzn2.0.3            amzn2-core     77 k[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  perl-libs            x86_64    4:5.16.3-299.amzn2.0.4      amzn2-core    685 k[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  perl-macros          x86_64    4:5.16.3-299.amzn2.0.4      amzn2-core     45 k[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  python-urllib3       noarch    1.25.9-1.amzn2.0.10         amzn2-core    197 k[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  system-release       x86_64    1:2-18.amzn2                amzn2-core     19 k[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  tzdata               noarch    2026c-1.amzn2.0.1           amzn2-core    483 k[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:  unzip                x86_64    6.0-57.amzn2.0.2            amzn2-core    182 k[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Transaction Summary[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ================================================================================[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Install   1 Package[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Upgrade  26 Packages[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Total download size: 41 M[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Downloading packages:[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Delta RPMs disabled because /usr/bin/applydeltarpm not installed.[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: --------------------------------------------------------------------------------[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Total                                               66 MB/s |  41 MB  00:00[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Running transaction check[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Running transaction test[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Transaction test succeeded[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Running transaction[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Updating   : krb5-libs-1.15.1-55.amzn2.2.10.x86_64                       1/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Updating   : nss-sysinit-3.90.0-2.amzn2.0.3.x86_64                       2/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Updating   : nss-3.90.0-2.amzn2.0.3.x86_64                               3/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Updating   : 12:dhcp-libs-4.2.5-79.amzn2.1.6.x86_64                      4/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Updating   : 12:dhcp-common-4.2.5-79.amzn2.1.6.x86_64                    5/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Updating   : libkadm5-1.15.1-55.amzn2.2.10.x86_64                        6/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Updating   : 4:perl-libs-5.16.3-299.amzn2.0.4.x86_64                     7/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Updating   : 4:perl-macros-5.16.3-299.amzn2.0.4.x86_64                   8/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Updating   : perl-Storable-2.45-3.amzn2.0.3.x86_64                       9/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Updating   : 4:perl-5.16.3-299.amzn2.0.4.x86_64                         10/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Updating   : libxml2-2.9.1-6.amzn2.5.26.x86_64                          11/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Updating   : 2:microcode_ctl-2.1-47.amzn2.4.27.x86_64                   12/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Installing : kernel-4.14.355-284.741.amzn2.x86_64                       13/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Updating   : libxml2-python-2.9.1-6.amzn2.5.26.x86_64                   14/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Updating   : perl-HTTP-Tiny-0.033-3.amzn2.0.2.noarch                    15/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Updating   : 1:perl-Pod-Escapes-1.04-299.amzn2.0.4.noarch               16/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Updating   : krb5-devel-1.15.1-55.amzn2.2.10.x86_64                     17/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Updating   : 12:dhclient-4.2.5-79.amzn2.1.6.x86_64                      18/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Updating   : nss-tools-3.90.0-2.amzn2.0.3.x86_64                        19/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Updating   : 2:libpng-1.5.13-8.amzn2.0.9.x86_64                         20/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Updating   : ec2-hibinit-agent-1.0.11-1.amzn2.noarch                    21/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Updating   : unzip-6.0-57.amzn2.0.2.x86_64                              22/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Updating   : 1:system-release-2-18.amzn2.x86_64                         23/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Updating   : tzdata-2026c-1.amzn2.0.1.noarch                            24/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Updating   : libnghttp2-1.52.0-1.amzn2.0.1.x86_64                       25/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Updating   : python-urllib3-1.25.9-1.amzn2.0.10.noarch                  26/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Updating   : aws-cfn-bootstrap-2.0-40.amzn2.noarch                      27/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Cleanup    : 12:dhclient-4.2.5-79.amzn2.1.5.x86_64                      28/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Cleanup    : 12:dhcp-common-4.2.5-79.amzn2.1.5.x86_64                   29/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Cleanup    : 1:perl-Pod-Escapes-1.04-299.amzn2.0.3.noarch               30/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Cleanup    : perl-HTTP-Tiny-0.033-3.amzn2.0.1.noarch                    31/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Cleanup    : 12:dhcp-libs-4.2.5-79.amzn2.1.5.x86_64                     32/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Cleanup    : ec2-hibinit-agent-1.0.10-2.amzn2.noarch                    33/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Cleanup    : 1:system-release-2-17.amzn2.x86_64                         34/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Cleanup    : tzdata-2026a-1.amzn2.0.1.noarch                            35/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Cleanup    : python-urllib3-1.25.9-1.amzn2.0.9.noarch                   36/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Cleanup    : aws-cfn-bootstrap-2.0-38.amzn2.noarch                      37/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Cleanup    : 4:perl-libs-5.16.3-299.amzn2.0.3.x86_64                    38/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Cleanup    : 4:perl-macros-5.16.3-299.amzn2.0.3.x86_64                  39/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Cleanup    : 4:perl-5.16.3-299.amzn2.0.3.x86_64                         40/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Cleanup    : perl-Storable-2.45-3.amzn2.0.2.x86_64                      41/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Cleanup    : krb5-devel-1.15.1-55.amzn2.2.9.x86_64                      42/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Cleanup    : libkadm5-1.15.1-55.amzn2.2.9.x86_64                        43/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Cleanup    : libxml2-python-2.9.1-6.amzn2.5.24.x86_64                   44/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Cleanup    : nss-tools-3.90.0-2.amzn2.0.2.x86_64                        45/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Cleanup    : nss-sysinit-3.90.0-2.amzn2.0.2.x86_64                      46/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Cleanup    : nss-3.90.0-2.amzn2.0.2.x86_64                              47/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Cleanup    : libxml2-2.9.1-6.amzn2.5.24.x86_64                          48/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Cleanup    : krb5-libs-1.15.1-55.amzn2.2.9.x86_64                       49/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Cleanup    : 2:libpng-1.5.13-8.amzn2.0.8.x86_64                         50/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Cleanup    : unzip-6.0-57.amzn2.0.1.x86_64                              51/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Cleanup    : 2:microcode_ctl-2.1-47.amzn2.4.26.x86_64                   52/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Cleanup    : libnghttp2-1.41.0-1.amzn2.0.6.x86_64                       53/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : perl-Storable-2.45-3.amzn2.0.3.x86_64                       1/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : aws-cfn-bootstrap-2.0-40.amzn2.noarch                       2/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : python-urllib3-1.25.9-1.amzn2.0.10.noarch                   3/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : libnghttp2-1.52.0-1.amzn2.0.1.x86_64                        4/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : libkadm5-1.15.1-55.amzn2.2.10.x86_64                        5/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : tzdata-2026c-1.amzn2.0.1.noarch                             6/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : perl-HTTP-Tiny-0.033-3.amzn2.0.2.noarch                     7/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : nss-3.90.0-2.amzn2.0.3.x86_64                               8/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : 4:perl-libs-5.16.3-299.amzn2.0.4.x86_64                     9/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : 4:perl-macros-5.16.3-299.amzn2.0.4.x86_64                  10/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : 2:microcode_ctl-2.1-47.amzn2.4.27.x86_64                   11/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : nss-tools-3.90.0-2.amzn2.0.3.x86_64                        12/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : 12:dhclient-4.2.5-79.amzn2.1.6.x86_64                      13/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : 1:system-release-2-18.amzn2.x86_64                         14/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : 4:perl-5.16.3-299.amzn2.0.4.x86_64                         15/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : unzip-6.0-57.amzn2.0.2.x86_64                              16/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : libxml2-python-2.9.1-6.amzn2.5.26.x86_64                   17/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : 12:dhcp-common-4.2.5-79.amzn2.1.6.x86_64                   18/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : krb5-devel-1.15.1-55.amzn2.2.10.x86_64                     19/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : 12:dhcp-libs-4.2.5-79.amzn2.1.6.x86_64                     20/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : libxml2-2.9.1-6.amzn2.5.26.x86_64                          21/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : ec2-hibinit-agent-1.0.11-1.amzn2.noarch                    22/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : 1:perl-Pod-Escapes-1.04-299.amzn2.0.4.noarch               23/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : nss-sysinit-3.90.0-2.amzn2.0.3.x86_64                      24/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : 2:libpng-1.5.13-8.amzn2.0.9.x86_64                         25/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : krb5-libs-1.15.1-55.amzn2.2.10.x86_64                      26/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : kernel-4.14.355-284.741.amzn2.x86_64                       27/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : libkadm5-1.15.1-55.amzn2.2.9.x86_64                        28/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : aws-cfn-bootstrap-2.0-38.amzn2.noarch                      29/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : krb5-devel-1.15.1-55.amzn2.2.9.x86_64                      30/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : 12:dhcp-libs-4.2.5-79.amzn2.1.5.x86_64                     31/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : 12:dhclient-4.2.5-79.amzn2.1.5.x86_64                      32/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : 12:dhcp-common-4.2.5-79.amzn2.1.5.x86_64                   33/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : unzip-6.0-57.amzn2.0.1.x86_64                              34/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : libnghttp2-1.41.0-1.amzn2.0.6.x86_64                       35/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : tzdata-2026a-1.amzn2.0.1.noarch                            36/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : 4:perl-5.16.3-299.amzn2.0.3.x86_64                         37/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : 4:perl-macros-5.16.3-299.amzn2.0.3.x86_64                  38/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : nss-tools-3.90.0-2.amzn2.0.2.x86_64                        39/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : 1:system-release-2-17.amzn2.x86_64                         40/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : krb5-libs-1.15.1-55.amzn2.2.9.x86_64                       41/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : libxml2-2.9.1-6.amzn2.5.24.x86_64                          42/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : 2:libpng-1.5.13-8.amzn2.0.8.x86_64                         43/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : ec2-hibinit-agent-1.0.10-2.amzn2.noarch                    44/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : libxml2-python-2.9.1-6.amzn2.5.24.x86_64                   45/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : perl-HTTP-Tiny-0.033-3.amzn2.0.1.noarch                    46/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : python-urllib3-1.25.9-1.amzn2.0.9.noarch                   47/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : 1:perl-Pod-Escapes-1.04-299.amzn2.0.3.noarch               48/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : nss-sysinit-3.90.0-2.amzn2.0.2.x86_64                      49/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : nss-3.90.0-2.amzn2.0.2.x86_64                              50/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : perl-Storable-2.45-3.amzn2.0.2.x86_64                      51/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : 2:microcode_ctl-2.1-47.amzn2.4.26.x86_64                   52/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   Verifying  : 4:perl-libs-5.16.3-299.amzn2.0.3.x86_64                    53/53[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Installed:[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   kernel.x86_64 0:4.14.355-284.741.amzn2[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Updated:[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   aws-cfn-bootstrap.noarch 0:2.0-40.amzn2[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   dhclient.x86_64 12:4.2.5-79.amzn2.1.6[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   dhcp-common.x86_64 12:4.2.5-79.amzn2.1.6[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   dhcp-libs.x86_64 12:4.2.5-79.amzn2.1.6[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   ec2-hibinit-agent.noarch 0:1.0.11-1.amzn2[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   krb5-devel.x86_64 0:1.15.1-55.amzn2.2.10[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   krb5-libs.x86_64 0:1.15.1-55.amzn2.2.10[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   libkadm5.x86_64 0:1.15.1-55.amzn2.2.10[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   libnghttp2.x86_64 0:1.52.0-1.amzn2.0.1[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   libpng.x86_64 2:1.5.13-8.amzn2.0.9[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   libxml2.x86_64 0:2.9.1-6.amzn2.5.26[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   libxml2-python.x86_64 0:2.9.1-6.amzn2.5.26[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   microcode_ctl.x86_64 2:2.1-47.amzn2.4.27[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   nss.x86_64 0:3.90.0-2.amzn2.0.3[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   nss-sysinit.x86_64 0:3.90.0-2.amzn2.0.3[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   nss-tools.x86_64 0:3.90.0-2.amzn2.0.3[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   perl.x86_64 4:5.16.3-299.amzn2.0.4[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   perl-HTTP-Tiny.noarch 0:0.033-3.amzn2.0.2[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   perl-Pod-Escapes.noarch 1:1.04-299.amzn2.0.4[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   perl-Storable.x86_64 0:2.45-3.amzn2.0.3[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   perl-libs.x86_64 4:5.16.3-299.amzn2.0.4[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   perl-macros.x86_64 4:5.16.3-299.amzn2.0.4[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   python-urllib3.noarch 0:1.25.9-1.amzn2.0.10[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   system-release.x86_64 1:2-18.amzn2[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   tzdata.noarch 0:2026c-1.amzn2.0.1[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   unzip.x86_64 0:6.0-57.amzn2.0.2[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Complete![0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + sudo yum install -y chrony gcc git make lsof[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Loaded plugins: extras_suggestions, langpacks, priorities, update-motd[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Package chrony-4.2-5.amzn2.0.2.x86_64 already installed and latest version[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Package gcc-7.3.1-18.amzn2.x86_64 already installed and latest version[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Package git-2.47.3-1.amzn2.0.1.x86_64 already installed and latest version[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Package 1:make-3.82-24.amzn2.x86_64 already installed and latest version[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Package lsof-4.87-6.amzn2.x86_64 already installed and latest version[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Nothing to do[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Provisioning with shell script: /var/folders/z7/kkbv39zn0vd4tp3678fm0w5r0000gn/T/packer-shell1838852216[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + sudo yum install -y gcc10-c++[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Loaded plugins: extras_suggestions, langpacks, priorities, update-motd[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Package gcc10-c++-10.5.0-1.amzn2.0.3.x86_64 already installed and latest version[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Nothing to do[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/gcc10-g++ 100[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc10-gcc 100[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + sudo update-alternatives --set g++ /usr/bin/gcc10-g++[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + sudo update-alternatives --set gcc /usr/bin/gcc10-gcc[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + g++ --version[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + echo '#include <ranges>'[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + g++ -std=c++20 -x c++ -E -[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: g++ (GCC) 10.5.0 20230707 (Red Hat 10.5.0-1)[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Copyright (C) 2020 Free Software Foundation, Inc.[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: This is free software; see the source for copying conditions.  There is NO[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: C++20 <ranges> OK[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + echo 'C++20 <ranges> OK'[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Provisioning with shell script: /var/folders/z7/kkbv39zn0vd4tp3678fm0w5r0000gn/T/packer-shell4284253056[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + sh -s -- -y --default-toolchain stable[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + curl --proto =https --tlsv1.2 -sSf https://sh.rustup.rs[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: info: downloading installer[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: warn: It looks like you have an existing rustup settings file at:[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: warn: /home/ec2-user/.rustup/settings.toml[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: warn: Rustup will install the default toolchain as specified in the settings file,[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: warn: instead of the one inferred from the default host triple.[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: info: profile set to default[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: info: default host triple is x86_64-unknown-linux-gnu[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: info: syncing channel updates for stable-x86_64-unknown-linux-gnu[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: info: latest update on 2026-08-20 for version 1.98.0 (88d9e12ae 2026-08-18)[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: info: downloading 6 components[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:   stable-x86_64-unknown-linux-gnu installed - rustc 1.98.0 (88d9e12ae 2026-08-18)[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Rust is installed now. Great![0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: To get started you may need to restart your current shell.[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: This would reload your PATH environment variable to include[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Cargo's bin directory ($HOME/.cargo/bin).[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: To configure your current shell, you need to source[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: the corresponding env file under $HOME/.cargo.[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: This is usually done by running one of the following (note the leading DOT):[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: . "$HOME/.cargo/env"            # For sh/bash/zsh/ash/dash/pdksh[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: source "$HOME/.cargo/env.fish"  # For fish[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: source "~/.cargo/env.nu"  # For nushell[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: source "$HOME/.cargo/env.tcsh"  # For tcsh[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: . "$HOME/.cargo/env.ps1"        # For pwsh[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: source "$HOME/.cargo/env.xsh"   # For xonsh[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: info: default toolchain set to stable-x86_64-unknown-linux-gnu[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + echo 'source $HOME/.cargo/env'[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Provisioning with shell script: /var/folders/z7/kkbv39zn0vd4tp3678fm0w5r0000gn/T/packer-shell183944566[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + source /home/ec2-user/.cargo/env[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: ++ case ":${PATH}:" in[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + git clone --depth 1 --branch 3.0.0-alpha.1 https://github.com/aws/clock-bound.git /home/ec2-user/clock-bound[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: Cloning into '/home/ec2-user/clock-bound'...[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: Note: switching to '4072097bab61e516c15377a581b649df49852021'.[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: You are in 'detached HEAD' state. You can look around, make experimental[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: changes and commit them, and you can discard any commits you make in this[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: state without impacting any branches by switching back to a branch.[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: If you want to create a new branch to retain commits you create, you may[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: do so (now or later) by using -c with the switch command. Example:[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   git switch -c <new-branch-name>[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: Or undo this operation with:[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   git switch -[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: Turn off this advice by setting config variable advice.detachedHead to false[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + cd /home/ec2-user/clock-bound[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + cargo build --release --bin clockbound[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Updating crates.io index[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:  Downloading crates ...[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded aho-corasick v1.1.4[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded fastrand v2.3.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded futures v0.3.31[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded http-body-util v0.1.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded hyper-util v0.1.18[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded icu_locale_core v2.1.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded icu_normalizer_data v2.1.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded icu_properties_data v2.1.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded iri-string v0.7.9[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded nalgebra-macros v0.2.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded pin-utils v0.1.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded powerfmt v0.2.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded pin-project-internal v1.1.10[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded crossbeam-channel v0.5.15[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded potential_utf v0.1.4[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded clock-bound-vmclock v2.0.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded clock-bound-shm v2.0.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded ipnet v2.11.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded ppv-lite86 v0.2.21[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded tracing v0.1.41[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded proc-macro2 v1.0.103[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded rand v0.8.5[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded form_urlencoded v1.2.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded log v0.4.28[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded prettyplease v0.2.37[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded quote v1.0.42[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded icu_collections v2.1.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded bytes v1.11.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded deranged v0.5.5[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded icu_provider v2.1.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded ident_case v1.0.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded autocfg v1.5.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded fnv v1.0.7[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded http-body v1.0.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded futures-io v0.3.31[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded crossbeam-utils v0.8.21[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded darling v0.21.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded darling_macro v0.21.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded displaydoc v0.2.5[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded clap_lex v0.7.6[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded colorchoice v1.0.4[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded futures-channel v0.3.31[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded futures-core v0.3.31[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded futures-task v0.3.31[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded futures-macro v0.3.31[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded idna_adapter v1.2.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded is_terminal_polyfill v1.70.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded rand_chacha v0.9.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded rawpointer v0.2.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded smallvec v1.15.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded atomic-waker v1.1.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded clock-bound-client v2.0.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded litemap v0.8.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded nu-ansi-term v0.50.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded rand_chacha v0.3.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded serde_core v1.0.228[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded signal-hook-registry v1.4.6[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded socket2 v0.6.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded tokio-macros v2.6.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded serde_derive v1.0.228[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded stable_deref_trait v1.2.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded strsim v0.11.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded time-core v0.1.6[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded heck v0.5.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded md5 v0.8.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded percent-encoding v2.3.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded utf8parse v0.2.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded itoa v1.0.15[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded pin-project-lite v0.2.16[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded anstyle-query v1.1.5[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded bitflags v1.3.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded cfg-if v1.0.4[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded getrandom v0.2.16[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded num-conv v0.1.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded rustversion v1.0.22[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded slab v0.4.11[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded synstructure v0.13.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded thiserror-impl v1.0.69[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded yoke-derive v0.8.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded approx v0.5.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded errno v0.3.14[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded lazy_static v1.5.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded matchers v0.2.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded memoffset v0.7.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded num-rational v0.4.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded clap_derive v4.5.49[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded futures-sink v0.3.31[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded iana-time-zone v0.1.64[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded num-complex v0.4.6[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded num-integer v0.1.46[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded paste v1.0.15[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded serde_urlencoded v0.7.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded sync_wrapper v1.0.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded tokio-retry v0.3.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded tower-layer v0.3.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded utf8_iter v1.0.4[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded want v0.3.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded zerofrom v0.1.6[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded anstream v0.6.21[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded anstyle v1.0.13[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded anstyle-parse v0.2.7[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded bytemuck v1.24.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded byteorder v1.5.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded futures-executor v0.3.31[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded httparse v1.10.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded num-traits v0.2.19[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded once_cell v1.21.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded pin-project v1.1.10[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded anyhow v1.0.100[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded base64 v0.22.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded bon v3.8.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded clap v4.5.53[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded getrandom v0.3.4[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded icu_properties v2.1.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded matrixmultiply v0.3.10[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded memchr v2.7.6[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded bitflags v2.10.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded darling_core v0.21.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded icu_normalizer v2.1.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded rand_core v0.6.4[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded bon-macros v3.8.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded mio v1.1.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded num-bigint v0.4.6[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded http v1.3.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded nom v8.0.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded futures-util v0.3.31[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded idna v1.1.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded hyper v1.8.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded libm v0.2.15[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded clap_builder v4.5.53[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded zerofrom-derive v0.1.6[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded chrono v0.4.42[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded thiserror-impl v2.0.17[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded time-macros v0.2.24[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded tinystr v0.8.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded tower-service v0.3.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded try-lock v0.2.5[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded thiserror v2.0.17[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded tracing-serde v0.2.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded thiserror v1.0.69[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded tracing-log v0.2.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded zerovec-derive v0.11.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded nix v0.26.4[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded safe_arch v0.7.4[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded sharded-slab v0.1.7[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded thread_local v1.1.9[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded writeable v0.6.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded yoke v0.8.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded rand_core v0.9.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded ryu v1.0.20[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded tracing-appender v0.2.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded tracing-attributes v0.1.30[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded unicode-ident v1.0.22[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded nalgebra v0.33.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded simba v0.9.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded tempfile v3.23.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded tracing-core v0.1.34[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded url v2.5.7[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded typenum v1.19.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded rand_distr v0.4.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded zerotrie v0.2.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded serde v1.0.228[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded tower v0.5.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded rand v0.9.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded tokio-util v0.7.17[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded wide v0.7.33[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded libc v0.2.177[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded serde_json v1.0.145[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded statrs v0.18.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded time v0.3.44[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded tower-http v0.6.6[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded zerovec v0.11.5[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded reqwest v0.12.24[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded tracing-subscriber v0.3.20[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded syn v2.0.110[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded zerocopy v0.8.28[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded rustix v1.1.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded regex-syntax v0.8.8[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded regex-automata v0.4.13[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded tokio v1.48.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   Downloaded linux-raw-sys v0.11.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling proc-macro2 v1.0.103[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling quote v1.0.42[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling unicode-ident v1.0.22[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling libc v0.2.177[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling syn v2.0.110[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling pin-project-lite v0.2.16[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling stable_deref_trait v1.2.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling cfg-if v1.0.4[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling memchr v2.7.6[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling futures-core v0.3.31[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling itoa v1.0.15[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling serde_core v1.0.228[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling futures-sink v0.3.31[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling pin-utils v0.1.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling futures-channel v0.3.31[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling synstructure v0.13.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling zerofrom-derive v0.1.6[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling yoke-derive v0.8.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling zerovec-derive v0.11.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling zerofrom v0.1.6[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling yoke v0.8.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling displaydoc v0.2.5[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling smallvec v1.15.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling zerovec v0.11.5[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling serde v1.0.228[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling futures-macro v0.3.31[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling tinystr v0.8.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling tokio-macros v2.6.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling serde_derive v1.0.228[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling signal-hook-registry v1.4.6[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling socket2 v0.6.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling mio v1.1.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling futures-io v0.3.31[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling litemap v0.8.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling autocfg v1.5.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling futures-task v0.3.31[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling writeable v0.6.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling once_cell v1.21.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling zerocopy v0.8.28[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling bytes v1.11.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling slab v0.4.11[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling futures-util v0.3.31[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling tracing-core v0.1.34[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling icu_locale_core v2.1.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling tokio v1.48.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling potential_utf v0.1.4[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling zerotrie v0.2.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling icu_normalizer_data v2.1.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling icu_properties_data v2.1.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling fnv v1.0.7[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling http v1.3.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling icu_provider v2.1.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling icu_collections v2.1.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling ppv-lite86 v0.2.21[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling http-body v1.0.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling tracing-attributes v0.1.30[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling getrandom v0.3.4[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling ident_case v1.0.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling percent-encoding v2.3.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling strsim v0.11.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling ryu v1.0.20[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling httparse v1.10.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling darling_core v0.21.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling tracing v0.1.41[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling icu_properties v2.1.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling icu_normalizer v2.1.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling getrandom v0.2.16[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling regex-syntax v0.8.8[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling rustversion v1.0.22[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling utf8parse v0.2.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling tower-service v0.3.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling libm v0.2.15[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling crossbeam-utils v0.8.21[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling serde_json v1.0.145[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling log v0.4.28[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling prettyplease v0.2.37[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling try-lock v0.2.5[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling want v0.3.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling anstyle-parse v0.2.7[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling regex-automata v0.4.13[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling rand_core v0.6.4[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling idna_adapter v1.2.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling darling_macro v0.21.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling form_urlencoded v1.2.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling memoffset v0.7.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling num-traits v0.2.19[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling sync_wrapper v1.0.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling colorchoice v1.0.4[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling utf8_iter v1.0.4[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling atomic-waker v1.1.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling lazy_static v1.5.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling tower-layer v0.3.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling anstyle v1.0.13[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling is_terminal_polyfill v1.70.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling thiserror v1.0.69[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling powerfmt v0.2.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling anstyle-query v1.1.5[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling anstream v0.6.21[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling deranged v0.5.5[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling tower v0.5.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling sharded-slab v0.1.7[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling hyper v1.8.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling idna v1.1.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling darling v0.21.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling rand_core v0.9.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling rand_chacha v0.3.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling matchers v0.2.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling tracing-log v0.2.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling tracing-serde v0.2.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling thiserror-impl v1.0.69[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling pin-project-internal v1.1.10[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling thread_local v1.1.9[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling ipnet v2.11.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling bitflags v2.10.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling nu-ansi-term v0.50.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling time-core v0.1.6[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling num-conv v0.1.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling base64 v0.22.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling clap_lex v0.7.6[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling iri-string v0.7.9[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling thiserror v2.0.17[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling heck v0.5.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling clap_derive v4.5.49[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling tower-http v0.6.6[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling clap_builder v4.5.53[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling hyper-util v0.1.18[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling time v0.3.44[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling tracing-subscriber v0.3.20[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling pin-project v1.1.10[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling bon-macros v3.8.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling crossbeam-channel v0.5.15[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling rand v0.8.5[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling rand_chacha v0.9.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling url v2.5.7[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling serde_urlencoded v0.7.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling http-body-util v0.1.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling futures-executor v0.3.31[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling thiserror-impl v2.0.17[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling iana-time-zone v0.1.64[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling bitflags v1.3.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling nix v0.26.4[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling chrono v0.4.42[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling reqwest v0.12.24[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling futures v0.3.31[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling tokio-retry v0.3.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling rand v0.9.2[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling bon v3.8.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling tracing-appender v0.2.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling clap v4.5.53[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling tokio-util v0.7.17[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling nom v8.0.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling errno v0.3.14[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling md5 v0.8.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling byteorder v1.5.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling clock-bound v3.0.0-alpha.1 (/home/ec2-user/clock-bound/clock-bound)[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: warning: the gold linker is deprecated and has known bugs with Rust[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   |[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   = help: consider using LLD or ld from GNU binutils instead[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: warning: `clock-bound` (bin "clockbound") generated 1 warning[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Finished `release` profile [optimized] target(s) in 1m 34s[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + sudo cp target/release/clockbound /usr/bin/clockbound[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + cd /home/ec2-user/clock-bound/clock-bound-ffi[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + cargo build --release[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling syn v2.0.110[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling futures-sink v0.3.31[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling futures-core v0.3.31[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling serde v1.0.228[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling futures-channel v0.3.31[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling rand_chacha v0.3.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling tracing-serde v0.2.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling rand v0.8.5[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling tokio v1.48.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling darling_core v0.21.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling futures-macro v0.3.31[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling futures-util v0.3.31[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling darling_macro v0.21.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling darling v0.21.3[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling pin-project-internal v1.1.10[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling prettyplease v0.2.37[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling bon-macros v3.8.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling futures-executor v0.3.31[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling pin-project v1.1.10[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling tracing-attributes v0.1.30[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling smallvec v1.15.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling tracing-subscriber v0.3.20[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling bon v3.8.1[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling tracing v0.1.41[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling tokio-retry v0.3.0[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling futures v0.3.31[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling clock-bound v3.0.0-alpha.1 (/home/ec2-user/clock-bound/clock-bound)[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:    Compiling clock-bound-ffi v3.0.0-alpha.1 (/home/ec2-user/clock-bound/clock-bound-ffi)[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: warning: the gold linker is deprecated and has known bugs with Rust[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   |[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:   = help: consider using LLD or ld from GNU binutils instead[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: warning: `clock-bound-ffi` (lib) generated 1 warning[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node:     Finished `release` profile [optimized] target(s) in 12.37s[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + sudo cp include/clockbound.h /usr/include/clockbound.h[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + sudo cp ../target/release/libclockbound.a ../target/release/libclockbound.so /usr/lib/[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + sudo ldconfig[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Provisioning with shell script: /var/folders/z7/kkbv39zn0vd4tp3678fm0w5r0000gn/T/packer-shell3083416281[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: --- searching cloned repo for configure_phc ---[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + echo '--- searching cloned repo for configure_phc ---'[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + find /home/ec2-user/clock-bound -iname '*configure_phc*' -o -iname '*phc*'[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + echo '--- top-level repo contents ---'[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + ls -la /home/ec2-user/clock-bound[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: /home/ec2-user/clock-bound/.github/workflows/phc.yml[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: /home/ec2-user/clock-bound/clock-bound-ff-tester/src/events/v1/phc.rs[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: /home/ec2-user/clock-bound/clock-bound-ff-tester/src/sim_phc.rs[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: /home/ec2-user/clock-bound/clock-bound-ff-tester/src/simulation/phc.rs[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: /home/ec2-user/clock-bound/clock-bound-ff-tester/src/simulation/phc[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: /home/ec2-user/clock-bound/clock-bound/assets/configure_phc[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: /home/ec2-user/clock-bound/clock-bound/src/daemon/clock_sync_algorithm/ff/phc.rs[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: /home/ec2-user/clock-bound/clock-bound/src/daemon/clock_sync_algorithm/source/phc.rs[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: /home/ec2-user/clock-bound/clock-bound/src/daemon/event/phc.rs[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: /home/ec2-user/clock-bound/clock-bound/src/daemon/io/phc.rs[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: /home/ec2-user/clock-bound/test/clock-bound-phc-offset[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: /home/ec2-user/clock-bound/test/clock-bound-phc-offset/src/phc.rs[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: /home/ec2-user/clock-bound/test/clock-bound-phc-offset/src/phc[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: /home/ec2-user/clock-bound/test/phc[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: --- top-level repo contents ---[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: ++ find /home/ec2-user/clock-bound -iname configure_phc -type f[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: total 96[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: drwxrwxr-x 11 ec2-user ec2-user   319 Aug 21 18:07 .[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: ++ head -n1[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: drwx------  9 ec2-user ec2-user   317 Aug 21 18:07 ..[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + PHC_SCRIPT=/home/ec2-user/clock-bound/clock-bound/assets/configure_phc[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + '[' -n /home/ec2-user/clock-bound/clock-bound/assets/configure_phc ']'[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: -rw-rw-r--  1 ec2-user ec2-user 64519 Aug 21 18:07 Cargo.lock[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: -rw-rw-r--  1 ec2-user ec2-user  1191 Aug 21 18:07 Cargo.toml[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: -rw-rw-r--  1 ec2-user ec2-user    64 Aug 21 18:07 .clippy.toml[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: drwxrwxr-x  4 ec2-user ec2-user   135 Aug 21 18:07 clock-bound[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + echo 'Found configure_phc at: /home/ec2-user/clock-bound/clock-bound/assets/configure_phc'[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: drwxrwxr-x  4 ec2-user ec2-user    96 Aug 21 18:07 clock-bound-ffi[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: drwxrwxr-x  3 ec2-user ec2-user   101 Aug 21 18:07 clock-bound-ff-tester[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + chmod +x /home/ec2-user/clock-bound/clock-bound/assets/configure_phc[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: -rw-rw-r--  1 ec2-user ec2-user   309 Aug 21 18:07 CODE_OF_CONDUCT.md[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: -rw-rw-r--  1 ec2-user ec2-user  3194 Aug 21 18:07 CONTRIBUTING.md[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + sudo /home/ec2-user/clock-bound/clock-bound/assets/configure_phc -c[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: drwxrwxr-x  3 ec2-user ec2-user    92 Aug 21 18:07 docs[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: drwxrwxr-x  3 ec2-user ec2-user    20 Aug 21 18:07 examples[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: drwxrwxr-x  8 ec2-user ec2-user   178 Aug 21 18:07 .git[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: drwxrwxr-x  3 ec2-user ec2-user    55 Aug 21 18:07 .github[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: -rw-rw-r--  1 ec2-user ec2-user    15 Aug 21 18:07 .gitignore[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: -rw-rw-r--  1 ec2-user ec2-user  1786 Aug 21 18:07 Makefile.toml[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: -rw-rw-r--  1 ec2-user ec2-user  7009 Aug 21 18:07 README.md[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: drwxrwxr-x  3 ec2-user ec2-user    65 Aug 21 18:09 target[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: drwxrwxr-x 13 ec2-user ec2-user   303 Aug 21 18:07 test[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Found configure_phc at: /home/ec2-user/clock-bound/clock-bound/assets/configure_phc[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: -c flag passed in. Only configuring /etc/modprobe.d/ena.conf[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Adding 'phc_enable=1' to /etc/modprobe.d/ena.conf...Success[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Provisioning with shell script: /var/folders/z7/kkbv39zn0vd4tp3678fm0w5r0000gn/T/packer-shell1189673775[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + echo 'refclock PHC /dev/ptp_ena poll 0 delay 0.000010 prefer'[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + sudo tee -a /etc/chrony.conf[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: refclock PHC /dev/ptp_ena poll 0 delay 0.000010 prefer[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + sudo systemctl enable chronyd[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Provisioning with shell script: /var/folders/z7/kkbv39zn0vd4tp3678fm0w5r0000gn/T/packer-shell3398353231[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + cat[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + sudo tee /etc/systemd/system/clockbound.service[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: [Unit][0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Description=ClockBound daemon[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: After=chronyd.service[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + sudo systemctl daemon-reload[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Requires=chronyd.service[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: [Service][0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: ExecStart=/usr/bin/clockbound --ip 127.0.0.1[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Restart=on-failure[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: RestartSec=2[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node:[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: [Install][0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: WantedBy=multi-user.target[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + sudo systemctl enable clockbound[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: Created symlink from /etc/systemd/system/multi-user.target.wants/clockbound.service to /etc/systemd/system/clockbound.service.[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Provisioning with shell script: /var/folders/z7/kkbv39zn0vd4tp3678fm0w5r0000gn/T/packer-shell2638290484[0m
+[1;31m==> ameyaDB-node.amazon-ebs.node: + sudo yum clean all[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Loaded plugins: extras_suggestions, langpacks, priorities, update-motd[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Cleaning repos: amzn2-core amzn2extra-docker[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Cleaning up everything[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Maybe you want: rm -rf /var/cache/yum, to also free up space taken by orphaned data from disabled or removed repos[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Stopping the source instance...[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Stopping instance[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Waiting for the instance to stop...[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Creating AMI ameyaDB-node-1787335547 from instance i-0e6de2a456069e369[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Attaching run tags to AMI...[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: AMI: ami-0479cba6c062ea44e[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Waiting for AMI to become ready...[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Skipping Enable AMI deprecation...[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Skipping Enable AMI deregistration protection...[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Modifying attributes on AMI (ami-0479cba6c062ea44e)...[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Modifying: description[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Modifying attributes on snapshot (snap-0d17ddea60cc971b0)...[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Adding tags to AMI (ami-0479cba6c062ea44e)...[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Tagging snapshot: snap-0d17ddea60cc971b0[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Creating AMI tags[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Adding tag: "SourceAMI": "ami-0a527f352691073f2"[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Adding tag: "BuiltBy": "packer"[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Adding tag: "ClockBoundVersion": "3.0.0-alpha.1"[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Adding tag: "Name": "ameyaDB-node"[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Creating snapshot tags[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Terminating the source AWS instance...[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Cleaning up any extra volumes...[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: No volumes to clean up, skipping[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Deleting temporary security group...[0m
+[1;32m==> ameyaDB-node.amazon-ebs.node: Deleting temporary keypair...[0m
+[1;32mBuild 'ameyaDB-node.amazon-ebs.node' finished after 10 minutes 18 seconds.[0m
+
+==> Wait completed after 10 minutes 18 seconds
+
+==> Builds finished. The artifacts of successful builds are:
+--> ameyaDB-node.amazon-ebs.node: AMIs were created:
+us-east-1: ami-0479cba6c062ea44e
+
