@@ -1,0 +1,30 @@
+$ python quantum_phase_estimation.py
+cirq version 1.7.0
+cirq version 1.7.0
+numpy version 2.4.4
+fire 0.7.1
+elapsedtimer 1.0.0
+CZ
+CZ
+Circuit after processing Qubit: 0 
+0: ───H───
+Circuit after processing Qubit: 1 
+0: ───H───@────────────
+          │
+1: ───────@^-0.5───H───
+Circuit after qubit state swap:
+0: ───H───@────────────×───
+          │            │
+1: ───────@^-0.5───H───×───
+0: ───────H───@─────────×─────────────@───────H^-1───
+              │         │             │
+1: ───────H───┼─────@───×^-1───H^-1───@^0.5──────────
+              │     │
+2: ───X───────@^2───@────────────────────────────────
+measurements: (no measurements)
+
+qubits: (cirq.LineQubit(0), cirq.LineQubit(1), cirq.LineQubit(2))
+output vector: |101⟩
+
+phase:
+output vector: |⟩
