@@ -162,7 +162,9 @@ void on_AE(int leader_id, xnt term) {
     {
         lock_guard g(raft_mutex);
 
-        if (term < curTerm) return;          // stale leader: ignore, don't touch the timer
+        // ignore stale leader
+        if (term < curTerm)
+            return;
 
         if (term > curTerm) {
             curTerm = term;
