@@ -193,7 +193,3 @@ void send_to_relay(const std::string &type, const std::string &msg) {
     ssize_t w = write(fd, out.c_str(), out.size());
     (void) w;
 }
-
-void send_to_relay(const std::string &msg) {
-    send_to_relay("stat", msg);
-}

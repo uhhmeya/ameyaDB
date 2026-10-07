@@ -46,7 +46,7 @@ function Run({ connected, send_msg, hellos }: RunProps) {
         const now = Date.now()
         if (now < next_allowed.current) return
         next_allowed.current = now + COOLDOWN_MS
-        send_msg({ msg: 'run_test.py' })
+        send_msg({ to: "relay", msg: "run_test.py" })
         wait(COOLDOWN_MS, () => navigate('/debug'))
     }
 

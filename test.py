@@ -1,16 +1,20 @@
 import asyncio
 import json
 from datetime import datetime
-
 import websockets
-
 import client
 
 RELAY_WS_URL = "ws://127.0.0.1:8765"
 
 NUM_NODES     = 5
 NUM_CLIENTS   = 10
-DOWNTIME_SECS = 15   # how long a terminated node stays down
+
+# test tells node to terminate
+# node comes back up born dead
+# how long should node play born dead
+DOWNTIME_SECS = 15
+
+
 SETTLE_SECS   = 20   # let the cluster re-elect and clients re-find the leader
 GIVE_UP_SECS  = 90   # a node that never comes back must not hang the whole test
 
@@ -67,6 +71,8 @@ async def test():
 
 
 async def main():
+
+    # connect to relay
     global relay_ws
     async with websockets.connect(RELAY_WS_URL) as conn:
         relay_ws = conn

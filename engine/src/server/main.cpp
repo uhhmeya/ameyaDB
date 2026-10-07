@@ -186,7 +186,12 @@ static bool handle_relay_msg(int fd, const string &msg) {
     // crash.SH
     if (msg.rfind("terminate", 0) == 0) {
         int secs = (msg.size() > 10) ? stoi(msg.substr(10)) : 30;
+
+        // TODO ~ send_to_relay() appends nodeID to every message so stating the nodeID
+        //  in the body of the message is redundant.
         send_to_relay("crash", to_string(myNodeID) + " " + to_string(secs));
+
+
         string terminate_cmd = "sudo systemd-run --collect --quiet --unit=ameyaDB-chaos-"
                              + to_string(myNodeID) + " " + CRASH_SCRIPT
                              + " " + to_string(myNodeID) + " " + to_string(secs);
