@@ -1,39 +1,29 @@
+# TODO ~ when test tells node to terminate for 10s, the node sends crash 10s to browser
+#  so that browser can display that the node has died. Problem is that if the node
+#  dies before the message hits the relay, then node is down but browser thinks its up!
+#  Fix this by making the node wait for an ACK to the crash msg before it self deletes
+
 import asyncio
 import websockets
 import json
-from datetime import datetime
 
-# anyone can connect
-TCP_HOST = "0.0.0.0"
-WS_HOST = "0.0.0.0"
-
-# nodes r/wr over random port
-# relay r/wr over port 9000
-TCP_PORT = 9000
-
-# browser r/wr over random port
-# relay r/wr over port 8765
-WS_PORT = 8765
+HOST = "0.0.0.0" # anyone can connect
+WS_PORT = 8765 # browser + testy
+TCP_PORT = 9000  # nodes
 
 # handlers
 relay_to_browser_WS = None
 relay_to_test_WS = None
 
 nodeFDtable = {}
+booted = set() # nodes that have said hello before
 
 async def send_to_browser(msg):
+    # TODO ~ is this method ever being called when relay is not connected to the browser?
     if relay_to_browser_WS is None:
         return
     try:
         await relay_to_browser_WS.send(msg)
-    except websockets.exceptions.ConnectionClosed:
-        pass
-
-async def tell_test(msg):
-    if relay_to_test_WS is None:
-        return
-    try:
-        await relay_to_test_WS.send(json.dumps(msg))
     except websockets.exceptions.ConnectionClosed:
         pass
 
@@ -56,26 +46,28 @@ async def on_node(reader, writer):
             if node_id is None and data.get("type") == "hello":
                 node_id = data["node"]
                 nodeFDtable[node_id] = writer
-                await tell_test({"born_dead": node_id})
 
-            # forward
+                # first boot
+                if node_id not in booted:
+                    booted.add(node_id)
+
+                # inform test that node is revived
+                else:
+                    try:
+                        await relay_to_test_WS.send(json.dumps({"revived": node_id}))
+                    except websockets.exceptions.ConnectionClosed:
+                        pass
+
+            # forward to browser
             await send_to_browser(msg)
 
     finally:
+
+        # when node dies, its writer is removed from the FD table
         if nodeFDtable.get(node_id) is writer:
             del nodeFDtable[node_id]
         writer.close()
 
-async def send_to_node(node, text):
-    writer = nodeFDtable.get(node)
-    if writer is None:
-        return False
-    try:
-        writer.write((text + "\n").encode())
-        await writer.drain()
-    except (ConnectionError, OSError):
-        return False
-    return True
 
 async def on_browser(websocket):
     global relay_to_browser_WS, relay_to_test_WS
@@ -96,8 +88,9 @@ async def on_browser(websocket):
 
             # forward msg to node
             else:
-                await send_to_node(data["to"], data["msg"])
-                # TODO ~ see if you can inline this method
+                writer = nodeFDtable[data["to"]]
+                writer.write((data["msg"] + "\n").encode())
+                await writer.drain()
 
     except websockets.exceptions.ConnectionClosed:
         pass
@@ -112,14 +105,14 @@ async def on_browser(websocket):
 async def main():
 
     # accept incoming con req from browser
-    async with websockets.serve(on_browser, WS_HOST, WS_PORT):
+    async with websockets.serve(on_browser, HOST, WS_PORT):
         while relay_to_browser_WS is None:
             await asyncio.sleep(0.2)
 
         print("relay & browser are connected", flush=True)
 
         # accept incoming con req from node
-        tcp_server = await asyncio.start_server(on_node, TCP_HOST, TCP_PORT)
+        tcp_server = await asyncio.start_server(on_node, HOST, TCP_PORT)
         async with tcp_server:
             await tcp_server.serve_forever()
 

@@ -9,17 +9,12 @@ RELAY_WS_URL = "ws://127.0.0.1:8765"
 NUM_NODES     = 5
 NUM_CLIENTS   = 10
 
-# test tells node to terminate
-# node comes back up born dead
-# how long should node play born dead
-DOWNTIME_SECS = 15
-
-
-SETTLE_SECS   = 20   # let the cluster re-elect and clients re-find the leader
-GIVE_UP_SECS  = 90   # a node that never comes back must not hang the whole test
+DOWNTIME_SECS = 15 # how long node should stay dead
+SETTLE_SECS   = 20 # how long cluster should be given grace to find new leader
+GIVE_UP_SECS  = 90 # a node that never comes back must not hang the whole test
 
 relay_ws = None
-born_dead = []       # one Event per node, set when it reconnects to the relay
+revived = []
 
 def log(msg):
     print(f"{datetime.now().strftime('%H:%M:%S')} {msg}", flush=True)
@@ -34,18 +29,18 @@ async def wake_cluster():
         await send_to_node(node_id, "connect all")
 
 
-# the relay sends {"born_dead": n} the moment node n reconnects to it
+# the relay sends {"revived": n} when node n says hello again after being terminated
 async def watch_relay():
     async for raw in relay_ws:
         msg = json.loads(raw)
-        if "born_dead" in msg:
-            born_dead[msg["born_dead"]].set()
+        if "revived" in msg:
+            revived[msg["revived"]].set()
 
 
-async def wait_until_born_dead(node_id):
-    # the relay prints "nodeN born dead" itself, so don't say it twice
+async def wait_until_revived(node_id):
     try:
-        await asyncio.wait_for(born_dead[node_id].wait(), GIVE_UP_SECS)
+        await asyncio.wait_for(revived[node_id].wait(), GIVE_UP_SECS)
+    # TODO ~ we can assume this timeOUT will never happen!
     except asyncio.TimeoutError:
         log(f"node{node_id} never came back -- moving on")
 
@@ -59,9 +54,9 @@ async def test():
 
     for node_id in range(NUM_NODES):
         log(f"node{node_id} down for {DOWNTIME_SECS}s")
-        born_dead[node_id].clear()
+        revived[node_id].clear()
         await send_to_node(node_id, f"terminate {DOWNTIME_SECS}")
-        await wait_until_born_dead(node_id)
+        await wait_until_revived(node_id)
         await send_to_node(node_id, "connect all")
 
         await asyncio.sleep(SETTLE_SECS)
@@ -78,7 +73,7 @@ async def main():
         relay_ws = conn
 
         for _ in range(NUM_NODES):
-            born_dead.append(asyncio.Event())
+            revived.append(asyncio.Event())
 
         watcher = asyncio.create_task(watch_relay())
         try:
