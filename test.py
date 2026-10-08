@@ -11,7 +11,6 @@ NUM_CLIENTS   = 10
 
 DOWNTIME_SECS = 15 # how long node should stay dead
 SETTLE_SECS   = 20 # how long cluster should be given grace to find new leader
-GIVE_UP_SECS  = 90 # a node that never comes back must not hang the whole test
 
 relay_ws = None
 revived = []
@@ -37,14 +36,6 @@ async def watch_relay():
             revived[msg["revived"]].set()
 
 
-async def wait_until_revived(node_id):
-    try:
-        await asyncio.wait_for(revived[node_id].wait(), GIVE_UP_SECS)
-    # TODO ~ we can assume this timeOUT will never happen!
-    except asyncio.TimeoutError:
-        log(f"node{node_id} never came back -- moving on")
-
-
 async def test():
     log("starting test...")
     await wake_cluster()
@@ -54,9 +45,8 @@ async def test():
 
     for node_id in range(NUM_NODES):
         log(f"node{node_id} down for {DOWNTIME_SECS}s")
-        revived[node_id].clear()
         await send_to_node(node_id, f"terminate {DOWNTIME_SECS}")
-        await wait_until_revived(node_id)
+        await revived[node_id].wait()
         await send_to_node(node_id, "connect all")
 
         await asyncio.sleep(SETTLE_SECS)
