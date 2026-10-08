@@ -15,17 +15,15 @@ SETTLE_SECS   = 20 # how long cluster should be given grace to find new leader
 relay_ws = None
 revived = []
 
-def log(msg):
+def print_to_dooby(msg):
     print(f"{datetime.now().strftime('%H:%M:%S')} {msg}", flush=True)
 
-# sends to relay. relay forwards to node
+# testy --> relay --> node
 async def send_to_node(node_id, text):
     await relay_ws.send(json.dumps({"to": node_id, "msg": text}))
 
 
-async def wake_cluster():
-    for node_id in range(NUM_NODES):
-        await send_to_node(node_id, "connect all")
+
 
 
 # the relay sends {"revived": n} when node n says hello again after being terminated
@@ -37,21 +35,24 @@ async def watch_relay():
 
 
 async def test():
-    log("starting test...")
-    await wake_cluster()
+    print_to_dooby("starting test...")
+
+    for node_id in range(NUM_NODES):
+        await send_to_node(node_id, "connect all")
     await asyncio.sleep(10)
+
     client.start_clients(NUM_CLIENTS)
     await asyncio.sleep(10)
 
     for node_id in range(NUM_NODES):
-        log(f"node{node_id} down for {DOWNTIME_SECS}s")
+        print_to_dooby(f"node{node_id} down for {DOWNTIME_SECS}s")
         await send_to_node(node_id, f"terminate {DOWNTIME_SECS}")
         await revived[node_id].wait()
         await send_to_node(node_id, "connect all")
 
         await asyncio.sleep(SETTLE_SECS)
 
-    log("all nodes cycled, draining")
+    print_to_dooby("all nodes cycled, draining")
     await asyncio.sleep(10)
 
 
@@ -72,7 +73,7 @@ async def main():
             watcher.cancel()
             client.stop_clients()
 
-    log("done")
+    print_to_dooby("done")
 
 
 if __name__ == "__main__":

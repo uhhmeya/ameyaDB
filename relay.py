@@ -16,16 +16,7 @@ relay_to_browser_WS = None
 relay_to_test_WS = None
 
 nodeFDtable = {}
-booted = set() # nodes that have said hello before
-
-async def send_to_browser(msg):
-    # TODO ~ is this method ever being called when relay is not connected to the browser?
-    if relay_to_browser_WS is None:
-        return
-    try:
-        await relay_to_browser_WS.send(msg)
-    except websockets.exceptions.ConnectionClosed:
-        pass
+booted = set()
 
 async def on_node(reader, writer):
     node_id = None
@@ -59,7 +50,10 @@ async def on_node(reader, writer):
                         pass
 
             # forward to browser
-            await send_to_browser(msg)
+            try:
+                await relay_to_browser_WS.send(msg)
+            except websockets.exceptions.ConnectionClosed:
+                pass
 
     finally:
 
@@ -67,7 +61,6 @@ async def on_node(reader, writer):
         if nodeFDtable.get(node_id) is writer:
             del nodeFDtable[node_id]
         writer.close()
-
 
 async def on_browser(websocket):
     global relay_to_browser_WS, relay_to_test_WS
@@ -101,7 +94,6 @@ async def on_browser(websocket):
         if relay_to_test_WS is websocket:
             relay_to_test_WS = None
 
-
 async def main():
 
     # accept incoming con req from browser
@@ -118,3 +110,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+
