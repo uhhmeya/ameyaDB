@@ -65,10 +65,9 @@ async def on_node(reader, writer):
 async def on_browser(websocket):
     global relay_to_browser_WS, relay_to_test_WS
 
-    if relay_to_browser_WS is None:
-        relay_to_browser_WS = websocket
-    else:
-        relay_to_test_WS = websocket
+    # assign handlers
+    if relay_to_browser_WS is None: relay_to_browser_WS = websocket
+    else: relay_to_test_WS = websocket
 
     try:
         async for raw in websocket:
