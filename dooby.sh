@@ -19,7 +19,7 @@ RELAY_LOG="$(mktemp)"
 
 die() { printf '!! %s\n' "$*" >&2; exit 1; }
 
-kill_tree() {   # kill a pid and its descendants
+kill_tree() {   # terminate a pid and its descendants
   local pid="${1:-}" k
   [[ -z "$pid" ]] && return 0
   for k in $(pgrep -P "$pid" 2>/dev/null || true); do kill_tree "$k"; done

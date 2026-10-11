@@ -1,0 +1,8 @@
+HOW TO COMPILE & RUN
+gcc -O2 -o answer answer.c
+taskset -c 0 ./answer
+python3 plot.py
+
+HOW TO COPY FILES TO AND FROM CSUG
+scp ~/ameyaDB/sideQuest/security/"reverse cache"/answer.c ~/ameyaDB/sideQuest/security/"reverse cache"/plot.py amandhar@cycle1.csug.rochester.edu:~
+scp 'amandhar@cycle1.csug.rochester.edu:~/*.png' 'amandhar@cycle1.csug.rochester.edu:~/*.csv' ~/Desktop/

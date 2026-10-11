@@ -37,33 +37,32 @@ def build_write(key, val):
     key, val = key.encode(), val.encode()
     return bytes([OP_WR]) + struct.pack("<I", len(key)) + key + struct.pack("<I", len(val)) + val
 
-
-
 async def run_client(client_id):
-    guess = random.randrange(NUM_NODES)
-    write_number = 0
+    guess_leader = random.randrange(NUM_NODES)
+    wr_num = 0
 
+    # connect to node
     while not test_over:
         writer = None
         try:
-            reader, writer = await asyncio.wait_for(asyncio.open_connection(f"node-{guess}.ameyadb.internal", CLIENT_PORT), timeout=2)
+            reader, writer = await asyncio.wait_for(asyncio.open_connection(f"node-{guess_leader}.ameyadb.internal", CLIENT_PORT), timeout=2)
 
             # send writes to leader
             while not test_over:
-                writer.write(build_write(f"c{client_id}-k{write_number}", f"v{write_number}"))
+                writer.write(build_write(f"c{client_id}-k{wr_num}", f"v{wr_num}"))
                 reply = await asyncio.wait_for(reader.readexactly(5), timeout=5)
                 is_leader, leader = struct.unpack("<Bi", reply)
                 if is_leader == I_AM_LEADER:
-                    write_number += 1
+                    wr_num += 1
 
                 # find leader
                 else:
-                    guess = leader if is_leader == I_AM_NOT_LEADER else random.randrange(NUM_NODES)
+                    guess_leader = leader if is_leader == I_AM_NOT_LEADER else random.randrange(NUM_NODES)
                     break
 
         # find leader
         except (OSError, asyncio.TimeoutError, asyncio.IncompleteReadError):
-            guess = random.randrange(NUM_NODES)
+            guess_leader = random.randrange(NUM_NODES)
 
         # hang up, and pause so we don't spam reconnects during an election
         if writer:
