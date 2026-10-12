@@ -29,8 +29,16 @@ export type ClusterState = {
 
 const LINK = /^(\d+)\s+(\d+)\s+(up|down)$/
 
-const stamp = (wall_us: number) =>
-    new Date(wall_us / 1000).toISOString().slice(11, 23)   // HH:MM:SS.mmm
+const ET_FORMAT = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    hourCycle: 'h23',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    fractionalSecondDigits: 3,
+})
+
+const stamp = (wall_us: number) => ET_FORMAT.format(new Date(wall_us / 1000))
 
 export function empty_state(n = 5): ClusterState {
     return {

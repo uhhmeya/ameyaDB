@@ -3,6 +3,11 @@
 #   ./dooby.sh           start stopped instances (fast, keeps disks + IPs)
 #   ./dooby.sh --fresh   terraform-replace all 5 nodes (slow, clean slate)
 
+# Must run under bash: zsh doesn't word-split $ids, so every aws call would get
+# all instance ids glued into ONE argument ("InvalidInstanceID.Malformed").
+# If launched via zsh/sh (e.g. an IDE interpreter setting), re-exec in bash.
+if [ -z "${BASH_VERSION:-}" ]; then exec bash "$0" "$@"; fi
+
 set -uo pipefail
 {
 
@@ -120,10 +125,9 @@ until grep -q "relay & browser are connected" "$RELAY_LOG"; do   # pause until b
   sleep 1
 done
 
-echo "starting nodes..."
 settle $NODE_IDS
 aws ec2 start-instances --instance-ids $NODE_IDS >/dev/null \
-  || fail "start-instances (nodes) failed — VcpuLimitExceeded means vCPU quota is too low"
+  || fail "start-instances (nodes) failed — see the aws error above (VcpuLimitExceeded = vCPU quota too low)"
 IPS="$(terraform -chdir="$TF_DIR" output -json node_ips 2>/dev/null | tr -d '[]"' | tr ',' ' ' | xargs)"
 [[ -z "$IPS" ]] && IPS="$(aws ec2 describe-instances --instance-ids $NODE_IDS \
   --query 'Reservations[].Instances[].PrivateIpAddress' --output text | xargs)"
