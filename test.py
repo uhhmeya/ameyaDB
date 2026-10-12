@@ -9,19 +9,15 @@ RELAY_WS_URL = "ws://127.0.0.1:8765"
 NUM_NODES     = 5
 NUM_CLIENTS   = 10
 
-DOWNTIME_SECS = 15 # how long node should stay dead
-SETTLE_SECS   = 20 # how long cluster should be given grace to find new leader
-
-# client --> node
 CLIENT_PORT = 7000
 OP_WR = 1
-I_AM_LEADER, I_AM_NOT_LEADER, IDK = 1, 2, 3
+I_AM_LEADER = 1
+I_AM_NOT_LEADER = 2
+IDK = 3
 
 relay_ws = None
 revive_flags = []
-
-# when true, clients stop sending writes
-test_over = False
+is_test_over = False
 
 # testy --> relay --> node
 async def send_to_node(node_id, text):
@@ -33,45 +29,60 @@ async def raise_flags():
         if "revived" in msg:
             revive_flags[msg["revived"]].set()
 
-def build_write(key, val):
+def sendWR(key, val):
     key, val = key.encode(), val.encode()
     return bytes([OP_WR]) + struct.pack("<I", len(key)) + key + struct.pack("<I", len(val)) + val
 
-async def run_client(client_id):
-    guess_leader = random.randrange(NUM_NODES)
+def node_host(node_id):
+    return f"node-{node_id}.ameyadb.internal"
+
+async def run_client(cl_num):
+
+    guess_node = node_host(random.randrange(NUM_NODES))
     wr_num = 0
 
-    # connect to node
-    while not test_over:
-        writer = None
+    while not is_test_over:
+        WR = None
+
         try:
-            reader, writer = await asyncio.wait_for(asyncio.open_connection(f"node-{guess_leader}.ameyadb.internal", CLIENT_PORT), timeout=2)
+            conn = asyncio.open_connection(guess_node, CLIENT_PORT)
+            R, WR = await asyncio.wait_for(conn, timeout=2)
 
             # send writes to leader
-            while not test_over:
-                writer.write(build_write(f"c{client_id}-k{wr_num}", f"v{wr_num}"))
-                reply = await asyncio.wait_for(reader.readexactly(5), timeout=5)
-                is_leader, leader = struct.unpack("<Bi", reply)
-                if is_leader == I_AM_LEADER:
+            while not is_test_over:
+
+                K = f"{cl_num}_{wr_num}"
+                V = f"v{random.randint(1, 999)}"
+                WR.write(sendWR(K, V))
+
+                reply = await asyncio.wait_for(R.readexactly(5), timeout=5)
+                leader_status = reply[0]
+
+                if leader_status == I_AM_LEADER:
                     wr_num += 1
 
-                # find leader
-                else:
-                    guess_leader = leader if is_leader == I_AM_NOT_LEADER else random.randrange(NUM_NODES)
+                # connect to leader
+                elif leader_status == I_AM_NOT_LEADER:
+                    leader_id = struct.unpack_from("<i", reply, 1)[0]
+                    guess_node = node_host(leader_id)
                     break
 
-        # find leader
+                else:  # idk (connect to random node)
+                    guess_node = node_host(random.randrange(NUM_NODES))
+                    break
+
+        # restart while loop
         except (OSError, asyncio.TimeoutError, asyncio.IncompleteReadError):
-            guess_leader = random.randrange(NUM_NODES)
+            guess_node = node_host(random.randrange(NUM_NODES))
 
-        # hang up, and pause so we don't spam reconnects during an election
-        if writer:
-            writer.close()
-        await asyncio.sleep(0.05)
+        finally:
 
+            if WR:
+                WR.close()
+            await asyncio.sleep(0.05)
 
 async def run():
-    global test_over
+    global is_test_over
     print("starting test...", flush=True)
 
     # wake up cluster
@@ -79,22 +90,24 @@ async def run():
         await send_to_node(node_id, "connect all")
     await asyncio.sleep(5)
 
-    clients = [asyncio.create_task(run_client(client_id)) for client_id in range(NUM_CLIENTS)]
+    # spawn clients
+    clients = []
+    for client_num in range(NUM_CLIENTS):
+        task = asyncio.create_task(run_client(client_num))
+        clients.append(task)
     await asyncio.sleep(5)
 
     for node_id in range(NUM_NODES):
-        await send_to_node(node_id, f"terminate {DOWNTIME_SECS}") # terminate node
-        await revive_flags[node_id].wait() # wait for revive
-        await send_to_node(node_id, "connect all") # tell it to rejoin cluster
-        await asyncio.sleep(SETTLE_SECS) # wait for cluster to settle
+        await send_to_node(node_id, f"terminate 15") # terminate
+        await revive_flags[node_id].wait()
+        await send_to_node(node_id, "connect all")
+        await asyncio.sleep(10) # settle
 
-    print("all nodes cycled, draining", flush=True)
-    await asyncio.sleep(10)
+    await asyncio.sleep(3)
 
     # stop clients and wait for them to finish
-    test_over = True
+    is_test_over = True
     await asyncio.gather(*clients)
-
 
 async def main():
     global relay_ws
@@ -117,7 +130,6 @@ async def main():
     await relay_ws.close()
 
     print("done", flush=True)
-
 
 if __name__ == "__main__":
     asyncio.run(main())
