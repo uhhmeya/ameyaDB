@@ -1,4 +1,3 @@
-
 #include "../headers/globals.h"
 #include "../headers/threads.h"
 #include <cstring>
@@ -79,12 +78,12 @@ void raft_init() {
         print("recovered t=" + to_string(curTerm) + " v=" + to_string(vote));
     else {
         curTerm = 0;
-        vote = -1;
+        vote = NO_VOTE;
         print("FIRST BOOT!!!");
     }
 
     role = FOLLOWER;
-    leader = -1;
+    leader = NO_LEADER;
     in_votes.clear();
     commit_idx = 0;
     sent_len.assign(NUM_NODES, 0);
@@ -140,7 +139,7 @@ void election_timer_loop() {
             ++curTerm;
             role = CANDIDATE;
             vote = myNodeID;
-            leader = -1;
+            leader = NO_LEADER;
             in_votes = { myNodeID };
             save_termVote();             // disk before the wire
 
@@ -168,7 +167,7 @@ void on_AE(int leader_id, xnt term) {
 
         if (term > curTerm) {
             curTerm = term;
-            vote = -1;
+            vote = NO_VOTE;
             save_termVote();
         }
 
@@ -193,5 +192,5 @@ bool am_i_leader() {
 
 int who_is_leader() {
     lock_guard g(raft_mutex);
-    return leader;   // -1 while unknown (election in progress)
+    return leader;   // NO_LEADER while unknown (election in progress)
 }

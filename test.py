@@ -11,9 +11,9 @@ NUM_CLIENTS   = 10
 
 CLIENT_PORT = 7000
 OP_WR = 1
-I_AM_LEADER = 1
-I_AM_NOT_LEADER = 2
-IDK = 3
+I_AM_LEADER = 11
+I_AM_NOT_LEADER = 12
+IDK = 13
 
 relay_ws = None
 revive_flags = []

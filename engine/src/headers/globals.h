@@ -49,6 +49,15 @@ enum Op {
     APPEND_ENTRIES = 4,
     HELLO          = 5,
 };
+enum Status : uint8_t {
+    I_AM_LEADER     = 11,
+    I_AM_NOT_LEADER = 12,
+    IDK             = 13,
+};
+
+// sentinels
+inline constexpr int NO_LEADER = -1;
+inline constexpr int NO_VOTE   = -1;
 
 // global variables
 extern int myNodeID;
