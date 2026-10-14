@@ -1,91 +1,52 @@
-import type { msg } from '../hooks/useRelay'
+import { NUM_NODES } from '../hooks/useRelay.tsx'
+import type { msg } from '../hooks/useRelay.tsx'
 
-export type WireState = {
-    a: number
-    b: number
-    isUP: boolean
+const ALL_LINKS = NUM_NODES * (NUM_NODES - 1) / 2   // 5 nodes -> 10 links
+
+// a link is up when both of its nodes say so: "2 3 up" and "3 2 up"
+function count_links_up(says_up: boolean[][]) {
+    let count = 0
+    for (let a = 0; a < NUM_NODES; a++)
+        for (let b = a + 1; b < NUM_NODES; b++)
+            if (says_up[a][b] && says_up[b][a]) count++
+    return count
 }
 
-export type NodeState = {
-    id: number
-    peers: number[]
-    last_ts: string | null
-    life: number
-}
+// reads the relay log from the start and writes down each time the cluster changes
+export function cluster_events(log: msg[]) {
+    const events: { time: string, text: string }[] = []
 
-export type Cluster = {
-    nodes: NodeState[]
-    links: WireState[]
-    unparsed: string[] // junk
-}
+    // says_up[a][b] = the last thing node a said about its wire to node b
+    const says_up = Array.from({ length: NUM_NODES }, () => Array<boolean>(NUM_NODES).fill(false))
+    let down_node: string | null = null
 
-export type ClusterState = {
-    n: number
-    side: boolean[][]
-    last_ts: (string | null)[]
-    life: number[]
-    unparsed: string[] //junk
-}
+    for (const m of log) {
+        if (m.type !== 'wire') continue
 
-const LINK = /^(\d+)\s+(\d+)\s+(up|down)$/
+        const [a, b, state] = m.msg.split(' ')   // "1 3 down"
+        const before = count_links_up(says_up)
+        says_up[Number(a)][Number(b)] = state === 'up'
+        const after = count_links_up(says_up)
+        const time = new Date(m.wall_us / 1000).toLocaleTimeString()
 
-const ET_FORMAT = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    hourCycle: 'h23',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    fractionalSecondDigits: 3,
-})
+        // the last missing link came up
+        if (before < ALL_LINKS && after === ALL_LINKS) {
+            events.push({ time, text: down_node === null ? 'cluster up' : `node${down_node} back up` })
+            down_node = null
+        }
 
-const stamp = (wall_us: number) => ET_FORMAT.format(new Date(wall_us / 1000))
+        // the first link broke. node a sent this msg so it is alive, which means node b died
+        if (before === ALL_LINKS && after < ALL_LINKS) {
+            down_node = b
+            events.push({ time, text: `node${b} down` })
+        }
 
-export function empty_state(n = 5): ClusterState {
-    return {
-        n,
-        side: Array.from({ length: n }, () => Array<boolean>(n).fill(false)),
-        last_ts: Array<string | null>(n).fill(null),
-        life: Array<number>(n).fill(0),
-        unparsed: [], // junk
-    }
-}
-
-// updates side cells with T/F
-function apply_wire(s: ClusterState, m: msg) {
-    const g = LINK.exec(m.msg.trim())
-    if (!g) { s.unparsed.push(m.msg); return }
-    const sender = Number(g[1]), peer = Number(g[2])
-    if (sender !== m.node || peer < 0 || peer >= s.n) { s.unparsed.push(m.msg); return }
-    s.side[m.node][peer] = g[3] === 'up'
-}
-
-export function apply_msg(s: ClusterState, m: msg) {
-
-    // new life means break old wires
-    if (m.life > s.life[m.node]) {
-        s.life[m.node] = m.life
-        s.side[m.node].fill(false)
+        // the last link broke
+        if (before > 0 && after === 0) {
+            events.push({ time, text: 'cluster down' })
+            down_node = null
+        }
     }
 
-    s.last_ts[m.node] = stamp(m.wall_us)
-
-    // update wire connections
-    if (m.type === 'wire')
-        apply_wire(s, m)
-}
-
-export function derive(s: ClusterState): Cluster {
-    const links: WireState[] = []
-    for (let a = 0; a < s.n; a++)
-        for (let b = a + 1; b < s.n; b++)
-            links.push({ a, b, isUP: s.side[a][b] && s.side[b][a] })
-    const nodes: NodeState[] = Array.from({ length: s.n }, (_, id) => ({
-        id,
-        peers: links
-            .filter(l => l.isUP && (l.a === id || l.b === id))
-            .map(l => (l.a === id ? l.b : l.a)),
-        last_ts: s.last_ts[id],
-        life: s.life[id],
-    }))
-    return { nodes, links, unparsed: s.unparsed }
+    return events
 }

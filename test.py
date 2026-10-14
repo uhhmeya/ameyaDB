@@ -33,12 +33,12 @@ def sendWR(key, val):
     key, val = key.encode(), val.encode()
     return bytes([OP_WR]) + struct.pack("<I", len(key)) + key + struct.pack("<I", len(val)) + val
 
-def node_host(node_id):
+def guess(node_id):
     return f"node-{node_id}.ameyadb.internal"
 
 async def run_client(cl_num):
 
-    guess_node = node_host(random.randrange(NUM_NODES))
+    guess_node = guess(random.randrange(NUM_NODES))
     wr_num = 0
 
     while not is_test_over:
@@ -64,16 +64,16 @@ async def run_client(cl_num):
                 # connect to leader
                 elif leader_status == I_AM_NOT_LEADER:
                     leader_id = struct.unpack_from("<i", reply, 1)[0]
-                    guess_node = node_host(leader_id)
+                    guess_node = guess(leader_id)
                     break
 
                 else:  # idk (connect to random node)
-                    guess_node = node_host(random.randrange(NUM_NODES))
+                    guess_node = guess(random.randrange(NUM_NODES))
                     break
 
         # restart while loop
         except (OSError, asyncio.TimeoutError, asyncio.IncompleteReadError):
-            guess_node = node_host(random.randrange(NUM_NODES))
+            guess_node = guess(random.randrange(NUM_NODES))
 
         finally:
 
