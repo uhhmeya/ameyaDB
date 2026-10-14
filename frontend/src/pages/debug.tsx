@@ -8,11 +8,11 @@ interface DebugProps {
 function Debug({ log }: DebugProps) {
     return (
         <div className="fullscreen">
-            <ol>
+            <div className="events">
                 {cluster_events(log).map((e, i) => (
-                    <li key={i}>{e.time} {e.text}</li>
+                    <div key={i}>{e.time} {e.text}</div>
                 ))}
-            </ol>
+            </div>
         </div>
     )
 }

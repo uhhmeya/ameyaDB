@@ -119,10 +119,11 @@ html, body {
 .events {
     margin: 0;
     font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: clamp(1rem, 2vw, 1.5rem);
-    line-height: 1.8;
+    font-size: clamp(1.5rem, 3vw, 2.5rem);
+    font-weight: 500;
+    line-height: 1.7;
     letter-spacing: 0.02em;
-    color: rgba(255, 255, 255, 0.92);
+    color: #fff;
     animation: fade-up 0.5s ease both;
 }
 
