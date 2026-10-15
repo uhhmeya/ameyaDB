@@ -40,9 +40,12 @@ static string serialize_entry(const entry& e) {
 // commit
 void apply_entry(const string& k, const string& v) {
 
+    xnt term = get_cur_term();
+
     entry e;
     e.wr.k = k;
     e.wr.v = v;
+    e.term = term;
     e.stats.forwarding_node = myNodeID;
     e.stats.time_leader_received = now_ms();
 

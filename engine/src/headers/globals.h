@@ -94,13 +94,15 @@ inline int rand_sleep_timer_ms(int lo, int hi) {
     return dist(rng);
 }
 
-// shared
+//  *   *   * shared methods *  *   *
+
+//snap
 void truncate_wal(xnt idx_during_snap);
+
+// raft
 xnt get_log_length();
 xnt get_last_log_term();
-bool send_to_peer(int peer, const string& buf);
+xnt get_cur_term();
 
-// AWS
-inline const std::string SNS_TOPIC_ARN ="arn:aws:sns:us-east-1:540799520398:ameyaDB-replication";
-inline const char* PEER_ADDRS[3] = {"node-0.ameyadb.internal","node-1.ameyadb.internal","node-2.ameyadb.internal",};
-inline const std::string QUEUE_URLS[3] = {"https://sqs.us-east-1.amazonaws.com/540799520398/ameyaDB-replication-node-0","https://sqs.us-east-1.amazonaws.com/540799520398/ameyaDB-replication-node-1","https://sqs.us-east-1.amazonaws.com/540799520398/ameyaDB-replication-node-2"};
+// network
+bool send_to_peer(int peer, const string& buf);
