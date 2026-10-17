@@ -1,0 +1,21 @@
+\documentclass[border=3pt]{standalone}
+\usepackage[T1]{fontenc}
+\usepackage{libertine}
+\usepackage[libertine]{newtxmath}
+\usepackage{quantikz}
+\begin{document}
+\begin{quantikz}[row sep=0.42cm, column sep=0.5cm, wire types={n,q,q,q}]
+ & & \text{\footnotesize 1.\ load $b$} & \text{\footnotesize 2.\ phase estimation}
+ & \text{\footnotesize 3.\ invert} & \text{\footnotesize 4.\ uncompute}
+ & \text{\footnotesize 5.\ measure} & \\
+\lstick{ancilla\ \ $\ket{0}$}
+ & & & & \gate{R_y(\theta_k)} & & \meter{}
+ & \setwiretype{c} \rstick{keep the run if 1} \\
+\lstick{clock\ \ $\ket{0}^{\otimes n}$}
+ & \qwbundle{n} & & \gate[2]{\ \mathrm{QPE}\ } & \ctrl{-1} & \gate[2]{\ \mathrm{QPE}^{\dagger}\ } &
+ & \rstick{$\ket{0}^{\otimes n}$} \\
+\lstick{memory\ \ $\ket{0}^{\otimes m}$}
+ & \qwbundle{m} & \gate{\text{prepare } \ket{b}} & & & & \meter{}
+ & \setwiretype{c} \rstick{$i$ with probability $\propto |x_i|^2$}
+\end{quantikz}
+\end{document}

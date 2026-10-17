@@ -1,0 +1,16 @@
+\begin{tabular}{lccc}
+\toprule
+Source & $\langle X\rangle$ & $\langle Y\rangle$ & $\langle Z\rangle$ \\
+\midrule
+Expected values quoted in the listing & $0.1441$ & $0.4132$ & $-0.8992$ \\
+Classical solution (NumPy) & $0.1441$ & $0.4132$ & $-0.8992$ \\
+\midrule
+Output printed in the book (5000 repetitions) & $0.2128$ & $0.3746$ & $-0.8580$ \\
+Original listing, unmodified (mean of 100 runs) & $0.2025 \pm 0.0030$ & $0.3880 \pm 0.0023$ & $-0.8651 \pm 0.0013$ \\
+Our port with $t$ not passed ($t=1$), exact & $0.2025$ & $0.3876$ & $-0.8642$ \\
+\midrule
+Our port with $t$ passed, exact & $0.1441$ & $0.4132$ & $-0.8992$ \\
+Cirq with $t$ passed, 5000 repetitions & $0.145 \pm 0.027$ & $0.411 \pm 0.026$ & $-0.894 \pm 0.012$ \\
+Qiskit with $t$ passed, 5000 repetitions & $0.131 \pm 0.027$ & $0.414 \pm 0.025$ & $-0.904 \pm 0.012$ \\
+\bottomrule
+\end{tabular}
