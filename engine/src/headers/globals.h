@@ -45,9 +45,10 @@ struct entry {
 enum Op {
     WRITE          = 1,
     READ           = 2,
-    REQUEST_VOTE   = 3,
+    HELLO          = 3,
     APPEND_ENTRIES = 4,
-    HELLO          = 5,
+    VREQ           = 5,
+    VRES           = 6,
 };
 enum Status : uint8_t {
     I_AM_LEADER     = 11,
@@ -102,5 +103,4 @@ xnt get_log_idx();
 xnt get_last_log_term();
 xnt get_cur_term();
 bool send_to_peer(int peer, const string& buf);
-
-
+void get_log_idx_and_last_log_term(xnt &index, xnt &term);

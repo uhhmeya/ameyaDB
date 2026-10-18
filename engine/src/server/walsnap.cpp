@@ -66,6 +66,7 @@ void apply_entry(const string& k, const string& v) {
             wal.flush();
             log_vector.push_back(e);
         }
+
         db[e.wr.k] = e.wr.v;
         dk.insert(e.wr.k);
     }
@@ -263,3 +264,16 @@ xnt get_last_log_term() {
     lock_guard lock(log_mutex);
     return log_vector.empty() ? snap_term : log_vector.back().term;
 }
+
+void get_log_idx_and_last_log_term(xnt &index, xnt &term) {
+    lock_guard g(log_mutex);
+    if (!log_vector.empty()) {
+        index = log_vector.back().log_index;
+        term  = log_vector.back().term;
+    } else {
+        index = snap_index;
+        term  = snap_term;
+    }
+}
+
+
