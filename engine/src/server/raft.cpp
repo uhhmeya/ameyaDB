@@ -13,6 +13,8 @@
 #include <random>
 # include <thread>
 
+// TODO ~ fix walsnap bug explained by claude!
+
 enum Raft_Role {
     FOLLOWER,
     CANDIDATE,

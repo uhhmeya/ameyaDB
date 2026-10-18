@@ -94,15 +94,13 @@ inline int rand_sleep_timer_ms(int lo, int hi) {
     return dist(rng);
 }
 
-//  *   *   * shared methods *  *   *
+//* shared methods
 
-//snap
-void truncate_wal(xnt idx_during_snap);
-
-// raft
-xnt get_log_length();
+// shared methods
+void truncate_wal(xnt last_log_idx_in_snap, xnt last_term_in_snap);
+xnt get_log_idx();
 xnt get_last_log_term();
 xnt get_cur_term();
-
-// network
 bool send_to_peer(int peer, const string& buf);
+
+

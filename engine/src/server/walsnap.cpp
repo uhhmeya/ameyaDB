@@ -11,7 +11,7 @@
 #include <sstream>
 #include <cstdio>
 #include <random>
-#include <algorithm>   // std::find_if -- GCC 10's <ranges> lacks the range algorithms
+#include <algorithm>
 
 static const string SNAP_DIR_PATH = "../output/snaps/";
 static const string WAL_PATH      = "../output/wal.txt";
@@ -23,7 +23,8 @@ static mutex log_mutex;
 static str_arr_2D prev_snap_arr;
 static str_arr_1D dk;
 static vector<entry> log_vector;
-static xnt log_base = 0;
+static xnt snap_index = 0;
+static xnt snap_term  = 0;
 
 // turns entry into string
 static string serialize_entry(const entry& e) {
@@ -93,7 +94,7 @@ void remove_temp_snap() {
 }
 
 // truncate wal
-void truncate_wal(xnt snap_idx) {
+void truncate_wal(xnt snap_idx, xnt last_term) {
     lock_guard lock(log_mutex);
     ifstream old_wal(WAL_PATH);
     ofstream new_wal(WAL_PATH + string(".tmp"));
@@ -122,7 +123,8 @@ void truncate_wal(xnt snap_idx) {
     auto cut = std::find_if(log_vector.begin(), log_vector.end(),
                             [&](const entry& e){ return e.log_index > snap_idx; });
     log_vector.erase(log_vector.begin(), cut);
-    log_base = snap_idx;
+    snap_index = snap_idx;
+    snap_term  = last_term;
 }
 
 // create snapshots
@@ -139,12 +141,16 @@ void take_pics() {
 
         str_arr_1D empty;
         str_arr_2D wip_snap_arr = prev_snap_arr;
-        xnt snap_idx;
+        xnt snap_idx, last_term;
         {
             shared_lock lock(db_mutex);
             swap(empty, dk);
             str_arr_1D local_dk = empty;
-            snap_idx = log_index.load();
+            {
+                lock_guard l(log_mutex);
+                snap_idx  = snap_index + static_cast<xnt>(log_vector.size());
+                last_term = log_vector.empty() ? snap_term : log_vector.back().term;
+            }
             for (auto& k : local_dk)
                 wip_snap_arr[k] = db.contains(k) ? db.at(k) : "";
         }
@@ -152,12 +158,12 @@ void take_pics() {
 
         // snap.tmp --> snap.txt
         ofstream f(SNAP_DIR_PATH + "snap" + ".tmp");
-        f << snap_idx << "\n";
+        f << snap_idx << " " << last_term << "\n";
         for (auto& [k, v] : new_snap_arr) f << k << " " << v << "\n";
         f.flush(); f.close();
         rename((SNAP_DIR_PATH + "snap" + ".tmp").c_str(), (SNAP_DIR_PATH + "snap").c_str());
 
-        truncate_wal(snap_idx);
+        truncate_wal(snap_idx, last_term);
         prev_snap_arr = std::move(new_snap_arr);
         prev_snap_idx = snap_idx;
 
@@ -175,7 +181,11 @@ xnt load_snap() {
 
     string line;
     getline(f, line);
-    xnt snap_idx = stoul(line);
+    istringstream hdr(line);
+    xnt snap_idx = 0, last_term = 0;
+    hdr >> snap_idx >> last_term;
+    snap_index = snap_idx;
+    snap_term  = last_term;
 
     while (getline(f, line)) {
         auto sp = line.find(' ');
@@ -197,7 +207,6 @@ void replay_wal(xnt snap_idx) {
     if (!f.is_open())
         throw runtime_error("[replay_wal] could not open WAL content\n");
 
-    log_base = snap_idx;
     xnt highest_committed_idx = snap_idx;
 
     string line;
@@ -245,12 +254,12 @@ optional<entry> get_last_log_entry() {
     return log_vector.back();
 }
 
-xnt get_log_length() {
+xnt get_log_idx() {
     lock_guard lock(log_mutex);
-    return log_base + static_cast<xnt>(log_vector.size());
+    return snap_index + static_cast<xnt>(log_vector.size());
 }
 
 xnt get_last_log_term() {
     lock_guard lock(log_mutex);
-    return log_vector.empty() ? 0 : log_vector.back().term;
+    return log_vector.empty() ? snap_term : log_vector.back().term;
 }
