@@ -47,7 +47,7 @@ static void must(bool ok, const string &what)
 }
 
 static string build_Vreq(xnt term, xnt log_idx, xnt last_log_term) {
-    return to_string(static_cast<int>(VREQ)) + " "
+    return to_string(VREQ) + " "
         + to_string(myNodeID) + " "
         + to_string(term) + " "
         + to_string(log_idx) + " "
@@ -55,7 +55,7 @@ static string build_Vreq(xnt term, xnt log_idx, xnt last_log_term) {
 }
 
 static string build_Vres(xnt term, bool granted) {
-    return to_string(static_cast<int>(VRES)) + " "
+    return to_string(VRES) + " "
         + to_string(myNodeID) + " "
         + to_string(term) + " "
         + to_string(granted ? 1 : 0) + "\n";

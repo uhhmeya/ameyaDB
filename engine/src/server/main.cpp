@@ -36,6 +36,7 @@ xnt load_snap();
 void replay_wal(xnt x);
 void attach_reader_to_tcp_wire(int peer_id);
 void raft_init();
+void truncate_wal(xnt snap_idx, xnt last_term);
 
 static const string PEER_DOMAIN = "ameyadb.internal";
 static const string RELAY_IP = "10.0.100.70";
@@ -250,6 +251,7 @@ static int initiate_to_relay(const string &host, int port) {
         backoff_ms = min(backoff_ms * 2, 3000);
     }
 }
+
 static int initiate_to_peer(int peer_id) {
     int backoff_ms = 100;
     const int    peerPort = 8080 + peer_id;
