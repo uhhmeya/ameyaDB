@@ -39,14 +39,37 @@ resource "aws_subnet" "public" {
   tags = { Name = "ameyaDB-public" }
 }
 
+# NAT gateway + its EIP bill by the hour even with every node stopped, so they
+# only exist while the cluster is up. dooby.sh's start-up apply leaves this at
+# the default (true) and recreates them; on exit it applies with
+# -var nat_enabled=false to delete them. Default stays true so a plain
+# `terraform apply` can never pull the NAT out from under running nodes.
+variable "nat_enabled" {
+  type    = bool
+  default = true
+}
+
 resource "aws_eip" "nat" {
+  count  = var.nat_enabled ? 1 : 0
   domain = "vpc"
 }
 
 resource "aws_nat_gateway" "geochron" {
-  allocation_id = aws_eip.nat.id
+  count         = var.nat_enabled ? 1 : 0
+  allocation_id = aws_eip.nat[0].id
   subnet_id     = aws_subnet.public.id
   tags          = { Name = "ameyaDB-nat" }
+}
+
+# These two used to be single resources; keep their state when count was added.
+moved {
+  from = aws_eip.nat
+  to   = aws_eip.nat[0]
+}
+
+moved {
+  from = aws_nat_gateway.geochron
+  to   = aws_nat_gateway.geochron[0]
 }
 
 resource "aws_route_table" "public" {
@@ -60,9 +83,15 @@ resource "aws_route_table" "public" {
 
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.geochron.id
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.geochron.id
+  # One route per NAT that exists -- i.e. one while the cluster is up, none
+  # while it's down. With none, the old route is left in place as a harmless
+  # "blackhole" (nothing is running to use it); the next start repoints it.
+  dynamic "route" {
+    for_each = aws_nat_gateway.geochron[*].id
+    content {
+      cidr_block     = "0.0.0.0/0"
+      nat_gateway_id = route.value
+    }
   }
   tags = { Name = "ameyaDB-private-rt" }
 }
@@ -188,6 +217,12 @@ resource "aws_instance" "db_node" {
   key_name               = aws_key_pair.ameyaDB.key_name
   iam_instance_profile   = aws_iam_instance_profile.db_node.name
   vpc_security_group_ids = [aws_security_group.db_nodes.id]
+
+  # The NAT is recreated on every dooby start, and every node boot clones
+  # from GitHub through it. Without this, `dooby.sh --fresh` could launch the
+  # replacement nodes while the NAT is still being built, the clone would
+  # fail, and ameyaDB.service would refuse to start (it Requires= the build).
+  depends_on = [aws_route_table.private]
 
   # NOTE: every line below is flush at column 0 on purpose. Terraform's <<-
   # heredoc strips the SMALLEST indent found in the body, so a single flush

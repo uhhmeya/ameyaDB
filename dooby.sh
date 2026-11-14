@@ -19,10 +19,32 @@ export AWS_REGION="${AWS_REGION:-us-east-1}"
 
 FRESH=0; [[ "${1:-}" == "--fresh" ]] && FRESH=1
 NODE_IDS=""; BASTION_ID=""; BASTION_IP=""
-FRONTEND_PID=""; RELAY_PID=""; CLEANED=0
+FRONTEND_PID=""; RELAY_PID=""; CLEANED=0; NAT_TOUCHED=0
 RELAY_LOG="$(mktemp)"
 
-die() { printf '!! %s\n' "$*" >&2; exit 1; }
+# CLEANED=1 first: a Ctrl-C during the teardown must not hijack this exit into
+# cleanup(), which would swallow the "still billing" warning and exit 0.
+die() { printf '!! %s\n' "$*" >&2; CLEANED=1; nat_down; exit 1; }
+
+# The NAT gateway + its EIP bill by the hour even with every node stopped, so
+# they only live while this script does: the start-up apply below recreates them
+# (main.tf's nat_enabled defaults to true), and this deletes them on the way out.
+# Targeted so exiting never touches anything else. No-op until the start-up
+# apply has begun, so an early preflight `die` never runs terraform.
+NAT_OFF="-var nat_enabled=false -target=aws_route_table.private -target=aws_nat_gateway.geochron -target=aws_eip.nat"
+nat_down() {
+  [[ "$NAT_TOUCHED" == 1 ]] || return 0; NAT_TOUCHED=0
+  echo "removing NAT gateway + EIP (~1 min, let it finish)..."
+  local log; log="$(mktemp)"
+  # shellcheck disable=SC2086  # NAT_OFF is a flag list on purpose
+  if terraform -chdir="$TF_DIR" apply -auto-approve -input=false $NAT_OFF >"$log" 2>&1; then
+    echo "NAT gateway removed"
+  else
+    cat "$log"
+    echo "!! NAT teardown FAILED — still billing. run: terraform -chdir=$TF_DIR apply $NAT_OFF"
+  fi
+  rm -f "$log"
+}
 
 kill_tree() {   # terminate a pid and its descendants
   local pid="${1:-}" k
@@ -43,6 +65,7 @@ cleanup() {
   else
     echo "!! stop-instances FAILED — still billing. run: aws ec2 stop-instances --instance-ids $ids"
   fi
+  nat_down   # last: only after the nodes have been told to stop
   exit 0
 }
 trap cleanup INT TERM
@@ -69,7 +92,8 @@ command -v aws >/dev/null || die "aws cli not on PATH"
 command -v terraform >/dev/null || die "terraform not on PATH"
 [[ -f "$KEY" ]] || die "ssh key not found at $KEY"
 
-echo "refreshing infrastructure..."
+echo "refreshing infrastructure (recreates the NAT gateway, ~1-2 min)..."
+NAT_TOUCHED=1   # from here on, any exit path must delete the NAT again
 APPLY=(-auto-approve)
 [[ "$FRESH" == 1 ]] && for i in 0 1 2 3 4; do APPLY+=("-replace=aws_instance.db_node[$i]"); done
 TF_LOG_FILE="$(mktemp)"
