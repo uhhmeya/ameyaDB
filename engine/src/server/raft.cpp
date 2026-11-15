@@ -194,7 +194,7 @@ void onAE(int leader_id, xnt term) {
     }
 }
 
-void onVR(int c_ID, xnt c_Term, xnt c_LogIDX, xnt c_LogTERM) {
+void onVReq(int c_ID, xnt c_Term, xnt c_LogIDX, xnt c_LogTERM) {
 
     xnt term_when_VR;
     bool granted;
@@ -237,7 +237,7 @@ void onVR(int c_ID, xnt c_Term, xnt c_LogIDX, xnt c_LogTERM) {
     Psend(c_ID, build_Vres(term_when_VR, granted));
 }
 
-void onVRES(int c_ID, xnt c_Term, bool granted) {
+void onVRes(int c_ID, xnt c_Term, bool was_vote_granted) {
     lock_guard g(ROCK);
 
     if (c_Term < curTerm)
@@ -254,7 +254,7 @@ void onVRES(int c_ID, xnt c_Term, bool granted) {
         return;
     }
 
-    if (role != CANDIDATE || !granted)
+    if (role != CANDIDATE || !was_vote_granted)
         return;
 
     in_votes.insert(c_ID);
