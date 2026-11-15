@@ -7,6 +7,7 @@
 #include <cerrno>
 #include <string>
 #include <vector>
+#include <utility>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <arpa/inet.h>
@@ -402,8 +403,8 @@ int main(int argc, char *argv[]) {
 
     ensure_wal_is_open();
     remove_temp_snap();
-    xnt snap_idx = load_snap();
-    truncate_wal(snap_idx);
+    auto [snap_idx, last_term] = load_snap();
+    truncate_wal(snap_idx, last_term);
     replay_wal(snap_idx);
     raft_init();
 
