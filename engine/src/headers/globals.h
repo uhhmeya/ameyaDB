@@ -102,5 +102,5 @@ void truncate_wal(xnt last_log_idx_in_snap, xnt last_term_in_snap);
 xnt get_log_idx();
 xnt get_last_log_term();
 xnt get_cur_term();
-bool send_to_peer(int peer, const string& buf);
+bool Psend(int peer, const string& buf);
 void get_log_idx_and_last_log_term(xnt &index, xnt &term);
