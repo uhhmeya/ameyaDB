@@ -331,9 +331,8 @@ static void accept_4ever(int listener) {
         thread([peerFD]() { put_acceptor_on_wire(peerFD); }).detach();
     }
 }
-bool send_to_peer(int peer, const string &buf) {
-    // my_fd_to is empty until the `alive` gate opens -- indexing it before
-    // that is out of bounds, and this is reachable from raft's own thread.
+
+bool Psend(int peer, const string &buf) {
     if (peer < 0 || peer >= static_cast<int>(my_fd_to.size())) return false;
 
     int fd = my_fd_to[peer].load();
