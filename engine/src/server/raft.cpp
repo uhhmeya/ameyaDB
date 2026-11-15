@@ -236,3 +236,31 @@ void onVR(int c_ID, xnt c_Term, xnt c_LogIDX, xnt c_LogTERM) {
 
     Psend(c_ID, build_Vres(term_when_VR, granted));
 }
+
+void onVRES(int c_ID, xnt c_Term, bool granted) {
+    lock_guard g(ROCK);
+
+    if (c_Term < curTerm)
+        return;
+
+    if (c_Term > curTerm) {
+        curTerm = c_Term;
+        role = FOLLOWER;
+        vote = NO_VOTE;
+        leader = NO_LEADER;
+        in_votes.clear();
+        save_tv();
+        set_new_deadline();
+        return;
+    }
+
+    if (role != CANDIDATE || !granted)
+        return;
+
+    in_votes.insert(c_ID);
+
+    if (in_votes.size() >= NUM_NODES / 2 + 1) {
+        role = LEADER;
+        leader = myNodeID;
+    }
+}
