@@ -32,7 +32,7 @@ bool handle_read(int x);
 void ensure_wal_is_open();
 void remove_temp_snap();
 void take_pics();
-xnt load_snap();
+pair<xnt, xnt> load_snap();
 void replay_wal(xnt x);
 void attach_reader_to_tcp_wire(int peer_id);
 void raft_init();
