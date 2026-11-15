@@ -79,7 +79,7 @@ int who_is_leader() {
 static void broadcast(const string &msg) {
     for (int node = 0; node < NUM_NODES; node++) {
         if (node == myNodeID) continue;
-        send_to_peer(node, msg);
+        Psend(node, msg);
     }
 }
 
@@ -234,5 +234,5 @@ void onVR(int c_ID, xnt c_Term, xnt c_LogIDX, xnt c_LogTERM) {
     }
     // LOCK
 
-    send_to_peer(c_ID, build_Vres(term_when_VR, granted));
+    Psend(c_ID, build_Vres(term_when_VR, granted));
 }
