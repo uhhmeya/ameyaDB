@@ -7,7 +7,6 @@
 #include <cerrno>
 #include <string>
 #include <vector>
-#include <utility>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <arpa/inet.h>
@@ -33,9 +32,9 @@ bool handle_read(int x);
 void ensure_wal_is_open();
 void remove_temp_snap();
 void take_pics();
-pair<xnt, xnt> load_snap();
+xnt load_snap();
 void replay_wal(xnt x);
-void attach_reader_to_tcp_wire(int peer_id);
+void attach_reader_to_peer_wire(int peer_id);
 void raft_init();
 void truncate_wal(xnt snap_idx, xnt last_term);
 
@@ -141,21 +140,27 @@ static void put_acceptor_on_wire(int peerFD) {
 
     my_fd_to[sender_id] = peerFD;
 
-    attach_reader_to_tcp_wire(sender_id);
+    attach_reader_to_peer_wire(sender_id);
 
     int stale = peerFD;
     my_fd_to[sender_id].compare_exchange_strong(stale, -1);
     close(peerFD);
 }
-void attach_reader_to_tcp_wire(int peer_id) {
+
+static bool route_to_handler(int peerFD, char op) {
+    if      (op == WRITE) return handle_write(peerFD);
+    else if (op == READ)  return handle_read(peerFD);
+    return true;
+}
+
+void attach_reader_to_peer_wire(int peer_id) {
     int peerFD = my_fd_to[peer_id].load();
     send_to_relay("wire", to_string(myNodeID) + " " + to_string(peer_id) + " up");
 
     char op = 0;
     while (true) {
         if (read(peerFD, &op, 1) != 1) break;
-        if      (op == WRITE) { if (!handle_write(peerFD)) break; }
-        else if (op == READ)  { if (!handle_read(peerFD))  break; }
+        if (!route_to_handler(peerFD, op)) break;
     }
     send_to_relay("wire", to_string(myNodeID) + " " + to_string(peer_id) + " down");
 }
@@ -309,7 +314,7 @@ static void keep_initiator_on_wire(int peer_id) {
         int fd = initiate_to_peer(peer_id);
         my_fd_to[peer_id] = fd;
 
-        attach_reader_to_tcp_wire(peer_id);
+        attach_reader_to_peer_wire(peer_id);
 
         int stale = fd;
         my_fd_to[peer_id].compare_exchange_strong(stale, -1);
@@ -403,8 +408,8 @@ int main(int argc, char *argv[]) {
 
     ensure_wal_is_open();
     remove_temp_snap();
-    auto [snap_idx, last_term] = load_snap();
-    truncate_wal(snap_idx, last_term);
+    xnt snap_idx = load_snap();
+    truncate_wal(snap_idx);
     replay_wal(snap_idx);
     raft_init();
 
