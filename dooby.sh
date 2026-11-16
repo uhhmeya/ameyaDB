@@ -26,11 +26,6 @@ RELAY_LOG="$(mktemp)"
 # cleanup(), which would swallow the "still billing" warning and exit 0.
 die() { printf '!! %s\n' "$*" >&2; CLEANED=1; nat_down; exit 1; }
 
-# The NAT gateway + its EIP bill by the hour even with every node stopped, so
-# they only live while this script does: the start-up apply below recreates them
-# (main.tf's nat_enabled defaults to true), and this deletes them on the way out.
-# Targeted so exiting never touches anything else. No-op until the start-up
-# apply has begun, so an early preflight `die` never runs terraform.
 NAT_OFF="-var nat_enabled=false -target=aws_route_table.private -target=aws_nat_gateway.geochron -target=aws_eip.nat"
 nat_down() {
   [[ "$NAT_TOUCHED" == 1 ]] || return 0; NAT_TOUCHED=0
@@ -92,7 +87,7 @@ command -v aws >/dev/null || die "aws cli not on PATH"
 command -v terraform >/dev/null || die "terraform not on PATH"
 [[ -f "$KEY" ]] || die "ssh key not found at $KEY"
 
-echo "refreshing infrastructure (recreates the NAT gateway, ~1-2 min)..."
+echo "refreshing infrastructure..."
 NAT_TOUCHED=1   # from here on, any exit path must delete the NAT again
 APPLY=(-auto-approve)
 [[ "$FRESH" == 1 ]] && for i in 0 1 2 3 4; do APPLY+=("-replace=aws_instance.db_node[$i]"); done

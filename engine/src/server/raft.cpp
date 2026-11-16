@@ -79,7 +79,7 @@ int who_is_leader() {
 static void broadcast(const string &msg) {
     for (int node = 0; node < NUM_NODES; node++) {
         if (node == myNodeID) continue;
-        send_to_peer(node, msg);
+        Psend(node, msg);
     }
 }
 
@@ -194,7 +194,7 @@ void onAE(int leader_id, xnt term) {
     }
 }
 
-void onVR(int c_ID, xnt c_Term, xnt c_LogIDX, xnt c_LogTERM) {
+void onVReq(int c_ID, xnt c_Term, xnt c_LogIDX, xnt c_LogTERM) {
 
     xnt term_when_VR;
     bool granted;
@@ -234,5 +234,33 @@ void onVR(int c_ID, xnt c_Term, xnt c_LogIDX, xnt c_LogTERM) {
     }
     // LOCK
 
-    send_to_peer(c_ID, build_Vres(term_when_VR, granted));
+    Psend(c_ID, build_Vres(term_when_VR, granted));
+}
+
+void onVRes(int c_ID, xnt c_Term, bool was_vote_granted) {
+    lock_guard g(ROCK);
+
+    if (c_Term < curTerm)
+        return;
+
+    if (c_Term > curTerm) {
+        curTerm = c_Term;
+        role = FOLLOWER;
+        vote = NO_VOTE;
+        leader = NO_LEADER;
+        in_votes.clear();
+        save_tv();
+        set_new_deadline();
+        return;
+    }
+
+    if (role != CANDIDATE || !was_vote_granted)
+        return;
+
+    in_votes.insert(c_ID);
+
+    if (in_votes.size() >= NUM_NODES / 2 + 1) {
+        role = LEADER;
+        leader = myNodeID;
+    }
 }

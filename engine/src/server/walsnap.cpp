@@ -94,7 +94,6 @@ void remove_temp_snap() {
     if (exists(WAL_PATH + ".tmp")) remove(WAL_PATH + ".tmp");
 }
 
-// truncate wal
 void truncate_wal(xnt snap_idx, xnt last_term) {
     lock_guard lock(log_mutex);
     ifstream old_wal(WAL_PATH);

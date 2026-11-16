@@ -19,6 +19,8 @@
 #include "../headers/globals.h"
 #include "../headers/threads.h"
 
+//TODO ~ make browser display runtime or compile-time error that pops up on the ec2!
+
 int myNodeID;
 atomic<xnt> log_index{0};
 vector<atomic<int>> my_fd_to;
@@ -34,7 +36,7 @@ void remove_temp_snap();
 void take_pics();
 xnt load_snap();
 void replay_wal(xnt x);
-void attach_reader_to_tcp_wire(int peer_id);
+void attach_reader_to_peer_wire(int peer_id);
 void raft_init();
 void truncate_wal(xnt snap_idx, xnt last_term);
 
@@ -140,21 +142,27 @@ static void put_acceptor_on_wire(int peerFD) {
 
     my_fd_to[sender_id] = peerFD;
 
-    attach_reader_to_tcp_wire(sender_id);
+    attach_reader_to_peer_wire(sender_id);
 
     int stale = peerFD;
     my_fd_to[sender_id].compare_exchange_strong(stale, -1);
     close(peerFD);
 }
-void attach_reader_to_tcp_wire(int peer_id) {
+
+static bool route_to_handler(int peerFD, char op) {
+    if      (op == WRITE) return handle_write(peerFD);
+    else if (op == READ)  return handle_read(peerFD);
+    return true;
+}
+
+void attach_reader_to_peer_wire(int peer_id) {
     int peerFD = my_fd_to[peer_id].load();
     send_to_relay("wire", to_string(myNodeID) + " " + to_string(peer_id) + " up");
 
     char op = 0;
     while (true) {
         if (read(peerFD, &op, 1) != 1) break;
-        if      (op == WRITE) { if (!handle_write(peerFD)) break; }
-        else if (op == READ)  { if (!handle_read(peerFD))  break; }
+        if (!route_to_handler(peerFD, op)) break;
     }
     send_to_relay("wire", to_string(myNodeID) + " " + to_string(peer_id) + " down");
 }
@@ -308,7 +316,7 @@ static void keep_initiator_on_wire(int peer_id) {
         int fd = initiate_to_peer(peer_id);
         my_fd_to[peer_id] = fd;
 
-        attach_reader_to_tcp_wire(peer_id);
+        attach_reader_to_peer_wire(peer_id);
 
         int stale = fd;
         my_fd_to[peer_id].compare_exchange_strong(stale, -1);
@@ -325,9 +333,8 @@ static void accept_4ever(int listener) {
         thread([peerFD]() { put_acceptor_on_wire(peerFD); }).detach();
     }
 }
-bool send_to_peer(int peer, const string &buf) {
-    // my_fd_to is empty until the `alive` gate opens -- indexing it before
-    // that is out of bounds, and this is reachable from raft's own thread.
+
+bool Psend(int peer, const string &buf) {
     if (peer < 0 || peer >= static_cast<int>(my_fd_to.size())) return false;
 
     int fd = my_fd_to[peer].load();
@@ -372,8 +379,6 @@ int main(int argc, char *argv[]) {
     thread([] {
         keep_relay_initiator_on_wire(RELAY_IP, RELAY_PORT);
     }).detach();
-
-    // wait until connected to relay
     while (relay_fd.load() == -1)
         sleep_for(milliseconds(50));
 
@@ -383,21 +388,9 @@ int main(int argc, char *argv[]) {
         sleep_for(seconds(2));
     send_to_relay("awake", "awake");
 
-    // my_fd_to = (-1,-1,-1,-1,-1)
     my_fd_to = vector<atomic<int>>(NUM_NODES);
     for (auto &fd : my_fd_to) fd = -1;
 
-    /*
-    1. node0 sends op code to node2
-    2. node2 is processing
-    3. node0 dies, wire breaks
-    4. node2 finishes processing
-    5. node2 tries to ack through broken wire
-
-    SIGPIPE normally kills node2
-    SIG_IGN returns fail instead & continues process ,
-    allowing node2 to stay on the wire
-     */
     signal(SIGPIPE, SIG_IGN);
 
     ensure_wal_is_open();
