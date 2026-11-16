@@ -47,18 +47,22 @@ static void must(bool ok, const string &what)
 }
 
 static string build_Vreq(xnt term, xnt log_idx, xnt last_log_term) {
-    return to_string(VREQ) + " "
-        + to_string(myNodeID) + " "
-        + to_string(term) + " "
-        + to_string(log_idx) + " "
-        + to_string(last_log_term) + "\n";
+    char buf[1 + sizeof(int) + 3 * sizeof(xnt)];
+    buf[0] = VREQ;
+    memcpy(&buf[1], &myNodeID, sizeof(myNodeID));
+    memcpy(&buf[1 + sizeof(int)], &term, sizeof(term));
+    memcpy(&buf[1 + sizeof(int) + sizeof(xnt)], &log_idx, sizeof(log_idx));
+    memcpy(&buf[1 + sizeof(int) + 2 * sizeof(xnt)], &last_log_term, sizeof(last_log_term));
+    return string(buf, sizeof(buf));
 }
 
 static string build_Vres(xnt term, bool granted) {
-    return to_string(VRES) + " "
-        + to_string(myNodeID) + " "
-        + to_string(term) + " "
-        + to_string(granted ? 1 : 0) + "\n";
+    char buf[1 + sizeof(int) + sizeof(xnt) + 1];
+    buf[0] = VRES;
+    memcpy(&buf[1], &myNodeID, sizeof(myNodeID));
+    memcpy(&buf[1 + sizeof(int)], &term, sizeof(term));
+    buf[1 + sizeof(int) + sizeof(xnt)] = granted ? 1 : 0;
+    return string(buf, sizeof(buf));
 }
 
 xnt get_cur_term() {
