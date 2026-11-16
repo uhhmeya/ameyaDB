@@ -8,9 +8,10 @@ interface RunProps {
     connected: boolean
     send_msg: (data: unknown) => void
     hellos: number
+    compile_failed: boolean
 }
 
-function Run({ connected, send_msg, hellos }: RunProps) {
+function Run({ connected, send_msg, hellos, compile_failed }: RunProps) {
     const navigate = useNavigate()
     const [remaining, setRemaining] = useState(0)
     const next_allowed = useRef(0)
@@ -57,6 +58,8 @@ function Run({ connected, send_msg, hellos }: RunProps) {
                 <button className="run-button" onClick={run} disabled={locked}>
                     {locked ? `wait ${Math.ceil(remaining / 1000)}s` : 'run test.py'}
                 </button>
+            ) : compile_failed ? (
+                <p className="hint">nodes failed to compile</p>
             ) : (
                 <p className="hint">not all nodes are being born dead ({hellos}/{NUM_NODES})</p>
             )}

@@ -7,6 +7,7 @@
 #include <cerrno>
 #include <string>
 #include <vector>
+#include <utility>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <arpa/inet.h>
@@ -34,7 +35,7 @@ bool handle_read(int x);
 void ensure_wal_is_open();
 void remove_temp_snap();
 void take_pics();
-xnt load_snap();
+pair<xnt, xnt> load_snap();
 void replay_wal(xnt x);
 void attach_reader_to_peer_wire(int peer_id);
 void raft_init();
@@ -395,8 +396,8 @@ int main(int argc, char *argv[]) {
 
     ensure_wal_is_open();
     remove_temp_snap();
-    xnt snap_idx = load_snap();
-    truncate_wal(snap_idx);
+    auto [snap_idx, last_term] = load_snap();
+    truncate_wal(snap_idx, last_term);
     replay_wal(snap_idx);
     raft_init();
 

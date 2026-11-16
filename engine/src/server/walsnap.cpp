@@ -174,10 +174,10 @@ void take_pics() {
 }
 
 // load snap into DB
-xnt load_snap() {
+pair<xnt, xnt> load_snap() {
     ifstream f(SNAP_DIR_PATH + "snap");
 
-    if (!f.is_open()) return 0;
+    if (!f.is_open()) return {0, 0};
 
     string line;
     getline(f, line);
@@ -196,7 +196,7 @@ xnt load_snap() {
         prev_snap_arr[k] = v;
     }
 
-    return snap_idx;
+    return {snap_idx, last_term};
 }
 
 // replay wal entry not covered by snap

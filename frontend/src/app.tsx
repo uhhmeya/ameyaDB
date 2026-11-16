@@ -6,7 +6,7 @@ import Run from './pages/run.tsx'
 import Debug from './pages/debug.tsx'
 
 function App() {
-    const { hellos, ingest } = useCluster()
+    const { hellos, compile_failed, ingest } = useCluster()
     const { connected, log, send_msg } = useRelay(ingest)
 
     return (
@@ -15,7 +15,8 @@ function App() {
                 <Route path="/" element={<Landing connected={connected} />} />
                 <Route path="/run" element={<Run connected={connected}
                                                  send_msg={send_msg}
-                                                 hellos={hellos} />} />
+                                                 hellos={hellos}
+                                                 compile_failed={compile_failed} />} />
                 <Route path="/debug" element={<Debug log={log} />} />
             </Routes>
         </BrowserRouter>
