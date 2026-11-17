@@ -26,7 +26,7 @@ static mutex ROCK;
 
 // restore
 static xnt curTerm;
-static int vote;
+static int votedFor;
 
 // new
 static int leader;
@@ -56,12 +56,20 @@ static string build_Vreq(xnt term, xnt log_idx, xnt last_log_term) {
     return string(buf, sizeof(buf));
 }
 
-static string build_Vres(xnt term, bool granted) {
+static string build_Vres(xnt term, bool yes_or_no) {
     char buf[1 + sizeof(int) + sizeof(xnt) + 1];
     buf[0] = VRES;
     memcpy(&buf[1], &myNodeID, sizeof(myNodeID));
     memcpy(&buf[1 + sizeof(int)], &term, sizeof(term));
-    buf[1 + sizeof(int) + sizeof(xnt)] = granted ? 1 : 0;
+    buf[1 + sizeof(int) + sizeof(xnt)] = yes_or_no ? 1 : 0;
+    return string(buf, sizeof(buf));
+}
+
+static string build_AE(xnt term) {
+    char buf[1 + sizeof(int) + sizeof(xnt)];
+    buf[0] = APPEND_ENTRIES;
+    memcpy(&buf[1], &myNodeID, sizeof(myNodeID));
+    memcpy(&buf[1 + sizeof(int)], &term, sizeof(term));
     return string(buf, sizeof(buf));
 }
 
@@ -88,7 +96,7 @@ static void broadcast(const string &msg) {
 }
 
 static void save_tv() {
-    const string tv = to_string(curTerm) + " " + to_string(vote) + "\n";
+    const string tv = to_string(curTerm) + " " + to_string(votedFor) + "\n";
 
     // open raft.tmp
     int fd = open(RAFT_TMP_PATH.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
@@ -129,7 +137,7 @@ static void startELEC() {
 
         curTerm++;
         role = CANDIDATE;
-        vote = myNodeID;
+        votedFor = myNodeID;
         in_votes.clear();
         in_votes.insert(myNodeID);
         leader = NO_LEADER;
@@ -154,15 +162,30 @@ static void Ethread() {
     }
 }
 
+static void HBthread() {
+    while (true) {
+        sleep_for(milliseconds(50));
+
+        xnt term_when_HB;
+        {
+            lock_guard g(ROCK);
+            if (role != LEADER) continue;
+            term_when_HB = curTerm;
+        }
+
+        broadcast(build_AE(term_when_HB));
+    }
+}
+
 void raft_init() {
 
     // init
     curTerm = 0;
-    vote = NO_VOTE;
+    votedFor = NO_VOTE;
 
     // reboot
     ifstream f(RAFT_PATH);
-    bool isReboot = f.is_open() && (f >> curTerm >> vote);
+    bool isReboot = f.is_open() && (f >> curTerm >> votedFor);
 
     // all
     role = FOLLOWER;
@@ -174,6 +197,7 @@ void raft_init() {
 
     set_new_deadline();
     thread(Ethread).detach();
+    thread(HBthread).detach();
 }
 
 void onAE(int leader_id, xnt term) {
@@ -181,14 +205,13 @@ void onAE(int leader_id, xnt term) {
     {
         lock_guard g(ROCK);
 
-        // stale leader
         if (term < curTerm)
             return;
 
         // update
         if (term > curTerm) {
             curTerm = term;
-            vote = NO_VOTE;
+            votedFor = NO_VOTE;
             save_tv();
         }
 
@@ -201,7 +224,7 @@ void onAE(int leader_id, xnt term) {
 void onVReq(int c_ID, xnt c_Term, xnt c_LogIDX, xnt c_LogTERM) {
 
     xnt term_when_VR;
-    bool granted;
+    bool yes_or_no;
 
     // LOCK
     {
@@ -211,7 +234,7 @@ void onVReq(int c_ID, xnt c_Term, xnt c_LogIDX, xnt c_LogTERM) {
         if (c_Term > curTerm) {
             curTerm = c_Term;
             role = FOLLOWER;
-            vote = NO_VOTE;
+            votedFor = NO_VOTE;
             leader = NO_LEADER;
             save_tv();
         }
@@ -223,13 +246,13 @@ void onVReq(int c_ID, xnt c_Term, xnt c_LogIDX, xnt c_LogTERM) {
 
         bool logOk = (c_LogTERM > my_LogTERM) || (c_LogTERM == my_LogTERM && c_LogIDX >= my_LogIDX);
         bool termOk = (c_Term == curTerm);
-        bool voteOk = (vote == NO_VOTE || vote == c_ID);
+        bool voteOk = (votedFor == NO_VOTE || votedFor == c_ID);
 
-        granted = termOk && logOk && voteOk;
+        yes_or_no = termOk && logOk && voteOk;
 
         // vote
-        if (granted) {
-            vote = c_ID;
+        if (yes_or_no) {
+            votedFor = c_ID;
             save_tv();
             set_new_deadline();
         }
@@ -238,7 +261,7 @@ void onVReq(int c_ID, xnt c_Term, xnt c_LogIDX, xnt c_LogTERM) {
     }
     // LOCK
 
-    Psend(c_ID, build_Vres(term_when_VR, granted));
+    Psend(c_ID, build_Vres(term_when_VR, yes_or_no));
 }
 
 void onVRes(int c_ID, xnt c_Term, bool was_vote_granted) {
@@ -250,7 +273,7 @@ void onVRes(int c_ID, xnt c_Term, bool was_vote_granted) {
     if (c_Term > curTerm) {
         curTerm = c_Term;
         role = FOLLOWER;
-        vote = NO_VOTE;
+        votedFor = NO_VOTE;
         leader = NO_LEADER;
         in_votes.clear();
         save_tv();
@@ -258,6 +281,7 @@ void onVRes(int c_ID, xnt c_Term, bool was_vote_granted) {
         return;
     }
 
+    // if no
     if (role != CANDIDATE || !was_vote_granted)
         return;
 

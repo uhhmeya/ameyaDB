@@ -29,23 +29,12 @@ during various raft edge cases
 3. click invalidate caches
 4. click invalidate & restart
 
-# How to update AMI
-1. **ameyaDB %** which packer
-2. console output has to be `/opt/homebrew/bin/packer` 
-3. update the packer file
-4. **packer %** packer init ameyaDBnode.pkr.hcl
-5. **packer %** packer validate ameyaDBnode.pkr.hcl
-6. **packer %** packer build ameyaDBnode.pkr.hcl
-7. console output has to be us-east-1 : `ami-xxx`
-8. **terraform %** terraform plan -var="db_node_ami=`ami-xxx`
-9. console output must show 5 instances + 5 volume attachments replaced + 0 ebs volumes
-10. **terraform %** terraform apply -var="db_node_ami=`ami-xxx`
-
 # How to run script
 chmod +x dooby.sh && ./dooby.sh
 
-# Run this when you're done working
-aws ec2 stop-instances --instance-ids i-0e6e669af96efd2b2
+# ./dooby.sh --fresh
+run this everytime terraform/dooby/packer is updated
+
 
 
 

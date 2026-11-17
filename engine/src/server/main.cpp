@@ -32,6 +32,9 @@ static mutex peer_write_mutex;
 // announce
 bool handle_write(int x);
 bool handle_read(int x);
+bool handle_vreq(int x);
+bool handle_vres(int x);
+bool handle_ae(int x);
 void ensure_wal_is_open();
 void remove_temp_snap();
 void take_pics();
@@ -153,6 +156,9 @@ static void put_acceptor_on_wire(int peerFD) {
 static bool route_to_handler(int peerFD, char op) {
     if      (op == WRITE) return handle_write(peerFD);
     else if (op == READ)  return handle_read(peerFD);
+    else if (op == VREQ)  return handle_vreq(peerFD);
+    else if (op == VRES)  return handle_vres(peerFD);
+    else if (op == APPEND_ENTRIES) return handle_ae(peerFD);
     return true;
 }
 

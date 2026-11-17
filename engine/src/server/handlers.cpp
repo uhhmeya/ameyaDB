@@ -10,9 +10,9 @@ string apply_r(const string& k);
 // raft.cpp
 bool am_i_leader();
 int  who_is_leader();
-
-// msg too long
-static constexpr xnt MAX_FIELD = 1u << 20;
+void onVReq(int c_ID, xnt c_Term, xnt c_LogIDX, xnt c_LogTERM);
+void onVRes(int c_ID, xnt c_Term, bool was_vote_granted);
+void onAE(int leader_id, xnt term);
 
 // helpers
 static bool read_tcp(int client_fd, void* buf, size_t n) {
@@ -43,11 +43,11 @@ static bool write_tcp(int client_fd, const void* buf, size_t n) {
 static optional<pair<string,string>> read_kv(int client_fd) {
     xnt k_len{0}, v_len{0};
 
-    if (!read_tcp(client_fd, &k_len, sizeof(k_len)) || k_len > MAX_FIELD) return nullopt;
+    if (!read_tcp(client_fd, &k_len, sizeof(k_len))) return nullopt;
     string k(k_len, '\0');
     if (k_len && !read_tcp(client_fd, &k[0], k_len)) return nullopt;
 
-    if (!read_tcp(client_fd, &v_len, sizeof(v_len)) || v_len > MAX_FIELD) return nullopt;
+    if (!read_tcp(client_fd, &v_len, sizeof(v_len))) return nullopt;
     string v(v_len, '\0');
     if (v_len && !read_tcp(client_fd, &v[0], v_len)) return nullopt;
 
@@ -55,7 +55,7 @@ static optional<pair<string,string>> read_kv(int client_fd) {
 }
 static optional<string> read_k(int client_fd) {
     xnt k_len{0};
-    if (!read_tcp(client_fd, &k_len, sizeof(k_len)) || k_len > MAX_FIELD) return nullopt;
+    if (!read_tcp(client_fd, &k_len, sizeof(k_len))) return nullopt;
     string k(k_len, '\0');
     if (k_len && !read_tcp(client_fd, &k[0], k_len)) return nullopt;
     return k;
@@ -93,4 +93,38 @@ bool handle_read(int client_fd) {
 
     return write_tcp(client_fd, &v_len, sizeof(v_len))
         && write_tcp(client_fd, v.data(), v_len);
+}
+bool handle_vreq(int peer_fd) {
+    int c_ID{0};
+    xnt c_Term{0}, c_LogIDX{0}, c_LogTERM{0};
+
+    if (!read_tcp(peer_fd, &c_ID, sizeof(c_ID))) return false;
+    if (!read_tcp(peer_fd, &c_Term, sizeof(c_Term))) return false;
+    if (!read_tcp(peer_fd, &c_LogIDX, sizeof(c_LogIDX))) return false;
+    if (!read_tcp(peer_fd, &c_LogTERM, sizeof(c_LogTERM))) return false;
+
+    onVReq(c_ID, c_Term, c_LogIDX, c_LogTERM);
+    return true;
+}
+bool handle_vres(int peer_fd) {
+    int c_ID{0};
+    xnt c_Term{0};
+    bool yes_or_no{false};
+
+    if (!read_tcp(peer_fd, &c_ID, sizeof(c_ID))) return false;
+    if (!read_tcp(peer_fd, &c_Term, sizeof(c_Term))) return false;
+    if (!read_tcp(peer_fd, &yes_or_no, sizeof(yes_or_no))) return false;
+
+    onVRes(c_ID, c_Term, yes_or_no);
+    return true;
+}
+bool handle_ae(int peer_fd) {
+    int leader_id{0};
+    xnt term{0};
+
+    if (!read_tcp(peer_fd, &leader_id, sizeof(leader_id))) return false;
+    if (!read_tcp(peer_fd, &term, sizeof(term))) return false;
+
+    onAE(leader_id, term);
+    return true;
 }
