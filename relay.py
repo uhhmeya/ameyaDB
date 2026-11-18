@@ -1,15 +1,12 @@
-# TODO ~ when test tells node to terminate for 10s, the node sends crash 10s to browser
-#  so that browser can display that the node has died. Problem is that if the node
-#  dies before the message hits the relay, then node is down but browser thinks its up!
-#  Fix this by making the node wait for an ACK to the crash msg before it self deletes
-
 import asyncio
 import websockets
 import json
+import time
 
 HOST = "0.0.0.0" # anyone can connect
 WS_PORT = 8765 # browser + testy
 TCP_PORT = 9000  # nodes
+NUM_NODES = 5
 
 # handlers
 relay_to_browser_WS = None
@@ -17,6 +14,22 @@ relay_to_test_WS = None
 
 nodeFDtable = {}
 booted = set()
+# dead      : process is not running
+# born dead : process is running but the node is not in the cluster
+# alive     : node is participating in the cluster
+state = {n: "dead" for n in range(NUM_NODES)}
+
+def compute_cluster_status():
+    alive = [n for n in state if state[n] == "alive"]
+    born_dead = [n for n in state if state[n] == "born dead"]
+    dead = [n for n in state if state[n] == "dead"]
+    return f"alive {alive} born dead {born_dead} dead {dead}"
+
+async def inform_browser(status):
+    try:
+        await relay_to_browser_WS.send(json.dumps({"type": "cluster", "msg": status, "wall_us": time.time_ns() // 1000}))
+    except websockets.exceptions.ConnectionClosed:
+        pass
 
 async def on_node(reader, writer):
     node_id = None
@@ -24,12 +37,19 @@ async def on_node(reader, writer):
 
         # get msg from node
         while True:
-            raw = await reader.readline()
+
+            # handle death
+            try:
+                raw = await reader.readline()
+            except ConnectionResetError: raw = b""
             if not raw:
+                if node_id is not None:
+                    state[node_id] = "dead"
+                    await inform_browser(compute_cluster_status())
                 break
+
             msg = raw.decode("utf-8", errors="replace").rstrip("\n")
-            if not msg:
-                continue
+            if not msg: continue
             data = json.loads(msg)
 
 
@@ -38,16 +58,33 @@ async def on_node(reader, writer):
                 node_id = data["node"]
                 nodeFDtable[node_id] = writer
 
-                # first boot
-                if node_id not in booted:
-                    booted.add(node_id)
+                # an alive node that only reconnected to the relay stays alive
+                if state[node_id] == "dead":
+                    state[node_id] = "born dead"
+                    await inform_browser(compute_cluster_status())
 
-                # inform test that node is revived
-                else:
-                    try:
-                        await relay_to_test_WS.send(json.dumps({"revived": node_id}))
-                    except websockets.exceptions.ConnectionClosed:
-                        pass
+                    # first boot (testy isn't running yet)
+                    if node_id not in booted:
+                        booted.add(node_id)
+
+                    # tell testy that node is born dead
+                    else:
+                        try:
+                            await relay_to_test_WS.send(json.dumps({"born_dead": node_id}))
+                        except websockets.exceptions.ConnectionClosed:
+                            pass
+
+            # alive --> node is in the cluster
+            if data.get("type") == "alive":
+                state[node_id] = "alive"
+                await inform_browser(compute_cluster_status())
+
+            # node lost its tcp wire to a peer
+            if data.get("type") == "unreachable":
+                peer_id = int(data["msg"])
+                if state[peer_id] == "alive":
+                    # TODO ~ NODE IS SAYING IT CAN'T REACH AN ALIVE NODE!!! NETWORK PARTITION!!!
+                    pass
 
             # forward to browser
             try:

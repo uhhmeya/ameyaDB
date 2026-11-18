@@ -164,14 +164,14 @@ static bool route_to_handler(int peerFD, char op) {
 
 void attach_reader_to_peer_wire(int peer_id) {
     int peerFD = my_fd_to[peer_id].load();
-    send_to_relay("wire", to_string(myNodeID) + " " + to_string(peer_id) + " up");
 
     char op = 0;
     while (true) {
         if (read(peerFD, &op, 1) != 1) break;
         if (!route_to_handler(peerFD, op)) break;
     }
-    send_to_relay("wire", to_string(myNodeID) + " " + to_string(peer_id) + " down");
+
+    send_to_relay("unreachable", to_string(peer_id));
 }
 
 // tcp client
@@ -389,11 +389,11 @@ int main(int argc, char *argv[]) {
     while (relay_fd.load() == -1)
         sleep_for(milliseconds(50));
 
-    cout << "node is playing dead\n";
+    cout << "node is born dead\n";
 
     while (!alive.load())
         sleep_for(seconds(2));
-    send_to_relay("awake", "awake");
+    send_to_relay("alive", "alive");
 
     my_fd_to = vector<atomic<int>>(NUM_NODES);
     for (auto &fd : my_fd_to) fd = -1;

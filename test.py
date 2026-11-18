@@ -16,7 +16,7 @@ I_AM_NOT_LEADER = 12
 IDK = 13
 
 relay_ws = None
-revive_flags = []
+born_dead_flags = []
 is_test_over = False
 
 # testy --> relay --> node
@@ -26,8 +26,8 @@ async def send_to_node(node_id, text):
 async def raise_flags():
     async for raw in relay_ws:
         msg = json.loads(raw)
-        if "revived" in msg:
-            revive_flags[msg["revived"]].set()
+        if "born_dead" in msg:
+            born_dead_flags[msg["born_dead"]].set()
 
 def sendWR(key, val):
     key, val = key.encode(), val.encode()
@@ -99,7 +99,7 @@ async def run():
 
     for node_id in range(NUM_NODES):
         await send_to_node(node_id, f"terminate 15") # terminate
-        await revive_flags[node_id].wait()
+        await born_dead_flags[node_id].wait()
         await send_to_node(node_id, "connect all")
         await asyncio.sleep(10) # settle
 
@@ -115,9 +115,9 @@ async def main():
     # connect to relay
     relay_ws = await websockets.connect(RELAY_WS_URL)
 
-    # create revive_flags array
+    # create born_dead_flags array
     for _ in range(NUM_NODES):
-        revive_flags.append(asyncio.Event())
+        born_dead_flags.append(asyncio.Event())
 
     # notice when flags are raised
     watcher = asyncio.create_task(raise_flags())
