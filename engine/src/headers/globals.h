@@ -49,6 +49,8 @@ enum Op {
     APPEND_ENTRIES = 4,
     VREQ           = 5,
     VRES           = 6,
+    AERES          = 7,
+    SNAP           = 8,
 };
 enum Status : uint8_t {
     I_AM_LEADER     = 11,
@@ -104,3 +106,12 @@ xnt get_last_log_term();
 xnt get_cur_term();
 bool Psend(int peer, const string& buf);
 void get_log_idx_and_last_log_term(xnt &index, xnt &term);
+xnt append_entry(const string& k, const string& v, xnt term);
+void append_entries(const vector<entry>& suffix);
+void apply_entries(xnt commit_idx);
+bool log_ok(xnt prefix_len, xnt prefix_term);
+bool get_suffix(xnt &prefix_len, xnt &prefix_term, vector<entry> &suffix);
+xnt get_term(xnt idx);
+xnt get_applied_idx();
+string read_snap();
+xnt install_snap(const string& snap);

@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <random>
 #include <algorithm>
+#include <iterator>
 
 static const string SNAP_DIR_PATH = "../output/snaps/";
 static const string WAL_PATH      = "../output/wal.txt";
@@ -20,11 +21,13 @@ static unordered_map<string, string> db;
 static shared_mutex db_mutex;
 static ofstream wal;
 static mutex log_mutex;
+static mutex snap_mutex;
 static str_arr_2D prev_snap_arr;
 static str_arr_1D dk;
 static vector<entry> log_vector;
 static xnt snap_index = 0;
 static xnt snap_term  = 0;
+static xnt applied_idx = 0;
 
 // turns entry into string
 static string serialize_entry(const entry& e) {
@@ -38,38 +41,77 @@ static string serialize_entry(const entry& e) {
            to_string(e.checksum)                  + "\n";
 }
 
-// commit
-void apply_entry(const string& k, const string& v) {
+static xnt term_at(xnt idx) {
+    if (idx == snap_index) return snap_term;
+    if (idx < snap_index || idx > snap_index + log_vector.size()) return 0;
+    return log_vector[idx - snap_index - 1].term;
+}
 
-    xnt term = get_cur_term();
+static void chop_wal(xnt idx) {
+    log_vector.resize(idx - snap_index);
+
+    ofstream new_wal(WAL_PATH + string(".tmp"));
+    for (auto& e : log_vector) new_wal << serialize_entry(e);
+    new_wal.flush(); new_wal.close();
+
+    rename((WAL_PATH + string(".tmp")).c_str(), WAL_PATH.c_str());
+    wal.close(); wal.open(WAL_PATH, ios::app);
+}
+
+// commit
+void apply_entries(xnt commit_idx) {
+    unique_lock x(db_mutex);
+    lock_guard y(log_mutex);
+
+    for (; applied_idx < commit_idx; applied_idx++) {
+        const entry& e = log_vector[applied_idx - snap_index];
+        db[e.wr.k] = e.wr.v;
+        dk.insert(e.wr.k);
+    }
+}
+
+xnt append_entry(const string& k, const string& v, xnt term) {
 
     entry e;
     e.wr.k = k;
     e.wr.v = v;
     e.term = term;
     e.stats.forwarding_node = myNodeID;
+    e.stats.leader_node = myNodeID;
     e.stats.time_leader_received = now_ms();
 
+    // guards from truncate_wal
     {
-        unique_lock x(db_mutex);
+        lock_guard y(log_mutex);
 
         e.log_index = ++log_index;
         e.checksum  = compute_checksum(e);
 
-        string str_entry = serialize_entry(e);
-
-        // guards from truncate_wal
-        {
-            lock_guard y(log_mutex);
-
-            wal << str_entry;
-            wal.flush();
-            log_vector.push_back(e);
-        }
-
-        db[e.wr.k] = e.wr.v;
-        dk.insert(e.wr.k);
+        wal << serialize_entry(e);
+        wal.flush();
+        log_vector.push_back(e);
     }
+
+    return e.log_index;
+}
+
+void append_entries(const vector<entry>& suffix) {
+    lock_guard y(log_mutex);
+
+    for (const entry& e : suffix) {
+        xnt log_len = snap_index + log_vector.size();
+
+        if (e.log_index <= snap_index) continue;
+        if (e.log_index <= log_len && term_at(e.log_index) == e.term) continue;
+        if (e.log_index > log_len + 1) break;
+        if (e.log_index <= log_len) chop_wal(e.log_index - 1);
+
+        wal << serialize_entry(e);
+        log_vector.push_back(e);
+    }
+    wal.flush();
+
+    log_index = snap_index + log_vector.size();
 }
 
 // read
@@ -139,6 +181,7 @@ void take_pics() {
             continue;
         }
 
+        unique_lock s(snap_mutex);
         str_arr_1D empty;
         str_arr_2D wip_snap_arr = prev_snap_arr;
         xnt snap_idx, last_term;
@@ -148,8 +191,8 @@ void take_pics() {
             str_arr_1D local_dk = empty;
             {
                 lock_guard l(log_mutex);
-                snap_idx  = snap_index + static_cast<xnt>(log_vector.size());
-                last_term = log_vector.empty() ? snap_term : log_vector.back().term;
+                snap_idx  = applied_idx;
+                last_term = term_at(applied_idx);
             }
             for (auto& k : local_dk)
                 wip_snap_arr[k] = db.contains(k) ? db.at(k) : "";
@@ -166,6 +209,7 @@ void take_pics() {
         truncate_wal(snap_idx, last_term);
         prev_snap_arr = std::move(new_snap_arr);
         prev_snap_idx = snap_idx;
+        s.unlock();
 
         // prevent instant snapping
         sleep_for(milliseconds(rand_sleep_timer_ms(1200, 1800)));
@@ -186,6 +230,7 @@ pair<xnt, xnt> load_snap() {
     hdr >> snap_idx >> last_term;
     snap_index = snap_idx;
     snap_term  = last_term;
+    applied_idx = snap_idx;
 
     while (getline(f, line)) {
         auto sp = line.find(' ');
@@ -207,7 +252,7 @@ void replay_wal(xnt snap_idx) {
     if (!f.is_open())
         throw runtime_error("[replay_wal] could not open WAL content\n");
 
-    xnt highest_committed_idx = snap_idx;
+    xnt highest_idx = snap_idx;
 
     string line;
     while (getline(f, line)) {
@@ -236,15 +281,13 @@ void replay_wal(xnt snap_idx) {
 
         // partial
         if (e.checksum != cs) continue;
+        if (idx != highest_idx + 1) break;
 
-        // prev_snap = db on boot
-        db[e.wr.k] = e.wr.v;
-        prev_snap_arr[e.wr.k] = e.wr.v;
         log_vector.push_back(e);
 
-        highest_committed_idx = idx;
+        highest_idx = idx;
     }
-    log_index.store(highest_committed_idx);
+    log_index.store(highest_idx);
 }
 
 // get last log entry
@@ -273,6 +316,105 @@ void get_log_idx_and_last_log_term(xnt &index, xnt &term) {
         index = snap_index;
         term  = snap_term;
     }
+}
+
+bool log_ok(xnt prefix_len, xnt prefix_term) {
+    lock_guard lock(log_mutex);
+    if (snap_index + log_vector.size() < prefix_len) return false;
+    return prefix_len <= snap_index || term_at(prefix_len) == prefix_term;
+}
+
+bool get_suffix(xnt &prefix_len, xnt &prefix_term, vector<entry> &suffix) {
+    lock_guard lock(log_mutex);
+
+    if (prefix_len < snap_index) {
+        prefix_len  = snap_index;
+        prefix_term = snap_term;
+        return false;
+    }
+
+    prefix_term = term_at(prefix_len);
+    for (xnt i = prefix_len - snap_index; i < log_vector.size() && suffix.size() < 1000; i++)
+        suffix.push_back(log_vector[i]);
+    return true;
+}
+
+xnt get_term(xnt idx) {
+    lock_guard lock(log_mutex);
+    return term_at(idx);
+}
+
+xnt get_applied_idx() {
+    shared_lock lock(db_mutex);
+    return applied_idx;
+}
+
+string read_snap() {
+    ifstream f(SNAP_DIR_PATH + "snap");
+    return string(istreambuf_iterator<char>(f), istreambuf_iterator<char>());
+}
+
+xnt install_snap(const string& snap) {
+    lock_guard s(snap_mutex);
+
+    istringstream f(snap);
+    string line;
+    getline(f, line);
+    istringstream hdr(line);
+    xnt snap_idx = 0, last_term = 0;
+    hdr >> snap_idx >> last_term;
+
+    if (snap_idx <= applied_idx) return applied_idx;
+
+    str_arr_2D snap_arr;
+    while (getline(f, line)) {
+        auto sp = line.find(' ');
+        if (sp == string::npos) continue;
+        snap_arr[line.substr(0, sp)] = line.substr(sp + 1);
+    }
+
+    {
+        lock_guard lock(log_mutex);
+        if (snap_index + log_vector.size() > snap_idx && term_at(snap_idx) != last_term)
+            chop_wal(snap_idx);
+    }
+
+    ofstream tmp(SNAP_DIR_PATH + "snap" + ".tmp");
+    tmp << snap;
+    tmp.flush(); tmp.close();
+    rename((SNAP_DIR_PATH + "snap" + ".tmp").c_str(), (SNAP_DIR_PATH + "snap").c_str());
+
+    truncate_wal(snap_idx, last_term);
+
+    unique_lock x(db_mutex);
+    lock_guard y(log_mutex);
+    db = snap_arr;
+    prev_snap_arr = std::move(snap_arr);
+    dk.clear();
+    applied_idx = snap_idx;
+    log_index = snap_index + log_vector.size();
+
+    return snap_idx;
+}
+
+string db_state() {
+    shared_lock lock(db_mutex);
+
+    xnt last_term;
+    {
+        lock_guard l(log_mutex);
+        last_term = term_at(applied_idx);
+    }
+
+    unsigned long long digest = 0;
+    for (auto& [k, v] : db) {
+        entry e;
+        e.wr.k = k;
+        e.wr.v = v;
+        digest += compute_checksum(e);
+    }
+
+    return to_string(applied_idx) + " " + to_string(last_term) + " " + to_string(db.size()) + " " + to_string(digest);
 }
 
 

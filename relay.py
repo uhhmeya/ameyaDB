@@ -17,6 +17,8 @@ node_writers = {}
 nodes_seen_before = set()
 state = {n: "dead" for n in range(NUM_NODES)}
 compile_failed = False
+db_states = {}
+checker = None
 
 async def send(ws, payload):
     if ws is None: return
@@ -67,6 +69,9 @@ async def on_node_process(reader, writer):
             elif msg["type"] == "participating":
                 await set_state(node_id, "participating")
 
+            elif msg["type"] == "state":
+                db_states[node_id] = msg["msg"]
+
             elif msg["type"] == "unreachable":
                 peer_id = int(msg["msg"])
                 if state[peer_id] == "participating":
@@ -85,8 +90,39 @@ async def on_ec2(reader, writer):
     await inform_browser(f"{msg['node']} failed to compile")
     writer.close()
 
+async def check_agreement(testy):
+    await testy.wait()
+
+    for _ in range(30):
+        db_states.clear()
+        for writer in list(node_writers.values()):
+            try:
+                writer.write(b"state\n")
+                await writer.drain()
+            except ConnectionError: pass
+        await asyncio.sleep(1)
+        if len(db_states) == NUM_NODES and len(set(db_states.values())) == 1:
+            break
+
+    for node_id in sorted(db_states):
+        commit_idx, term, num_keys, digest = db_states[node_id].split()
+        print(f"node {node_id}: commit index {commit_idx}, term {term}, {num_keys} keys, digest {digest}", flush=True)
+
+    commit_idxs = {s.split()[0] for s in db_states.values()}
+    if len(db_states) < NUM_NODES:
+        verdict = f"only {len(db_states)}/{NUM_NODES} nodes reported their db"
+    elif len(set(db_states.values())) == 1:
+        verdict = f"all nodes agree on the db up to commit index {commit_idxs.pop()}"
+    elif len(set(db_states.values())) > len(commit_idxs):
+        verdict = "nodes DISAGREE on the db at the same commit index"
+    else:
+        verdict = f"nodes never reached the same commit index {sorted(commit_idxs)}"
+
+    print(verdict, flush=True)
+    await inform_browser(verdict)
+
 async def on_browser_or_testy(websocket):
-    global browser_ws, testy_ws
+    global browser_ws, testy_ws, checker
 
     # the browser connects first, testy second
     if browser_ws is None: browser_ws = websocket
@@ -98,7 +134,8 @@ async def on_browser_or_testy(websocket):
 
             # start test
             if data["to"] == "relay":
-                await asyncio.create_subprocess_exec("python3", "test.py")
+                testy = await asyncio.create_subprocess_exec("python3", "test.py")
+                checker = asyncio.create_task(check_agreement(testy))
 
             # forward msg to node
             else:

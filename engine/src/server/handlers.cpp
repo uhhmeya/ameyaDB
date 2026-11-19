@@ -4,15 +4,17 @@
 #include <cstring>
 
 // imports
-void apply_entry(const string& k, const string& v);
 string apply_r(const string& k);
 
 // raft.cpp
 bool am_i_leader();
 int  who_is_leader();
+bool onWrite(const string& k, const string& v);
 void onVReq(int c_ID, xnt c_Term, xnt c_LogIDX, xnt c_LogTERM);
 void onVRes(int c_ID, xnt c_Term, bool was_vote_granted);
-void onAE(int leader_id, xnt term);
+void onAE(int leader_id, xnt term, xnt prefix_len, xnt prefix_term, xnt leader_commit, const vector<entry>& suffix);
+void onAERes(int f_ID, xnt f_Term, xnt ack, bool yes_or_no);
+void onSnap(int leader_id, xnt term, const string& snap);
 
 // helpers
 static bool read_tcp(int client_fd, void* buf, size_t n) {
@@ -60,6 +62,20 @@ static optional<string> read_k(int client_fd) {
     if (k_len && !read_tcp(client_fd, &k[0], k_len)) return nullopt;
     return k;
 }
+static optional<entry> read_entry(int peer_fd) {
+    auto kv = read_kv(peer_fd);
+    if (!kv) return nullopt;
+
+    entry e;
+    e.wr.k = kv->first;
+    e.wr.v = kv->second;
+    if (!read_tcp(peer_fd, &e.stats, sizeof(e.stats))) return nullopt;
+    if (!read_tcp(peer_fd, &e.log_index, sizeof(e.log_index))) return nullopt;
+    if (!read_tcp(peer_fd, &e.term, sizeof(e.term))) return nullopt;
+    if (!read_tcp(peer_fd, &e.checksum, sizeof(e.checksum))) return nullopt;
+    if (compute_checksum(e) != e.checksum) return nullopt;
+    return e;
+}
 static bool reply(int client_fd, Status status, int leader_hint) {
     char buf[1 + sizeof(int)];
     buf[0] = static_cast<char>(status);
@@ -80,7 +96,8 @@ bool handle_write(int client_fd) {
     }
 
     auto [k, v] = *kv;
-    apply_entry(k, v);
+    if (!onWrite(k, v))
+        return reply(client_fd, IDK, -1);
 
     return reply(client_fd, I_AM_LEADER, myNodeID);
 }
@@ -120,11 +137,49 @@ bool handle_vres(int peer_fd) {
 }
 bool handle_ae(int peer_fd) {
     int leader_id{0};
-    xnt term{0};
+    xnt term{0}, prefix_len{0}, prefix_term{0}, leader_commit{0}, n{0};
 
     if (!read_tcp(peer_fd, &leader_id, sizeof(leader_id))) return false;
     if (!read_tcp(peer_fd, &term, sizeof(term))) return false;
+    if (!read_tcp(peer_fd, &prefix_len, sizeof(prefix_len))) return false;
+    if (!read_tcp(peer_fd, &prefix_term, sizeof(prefix_term))) return false;
+    if (!read_tcp(peer_fd, &leader_commit, sizeof(leader_commit))) return false;
+    if (!read_tcp(peer_fd, &n, sizeof(n))) return false;
 
-    onAE(leader_id, term);
+    vector<entry> suffix;
+    for (xnt i = 0; i < n; i++) {
+        auto e = read_entry(peer_fd);
+        if (!e) return false;
+        suffix.push_back(*e);
+    }
+
+    onAE(leader_id, term, prefix_len, prefix_term, leader_commit, suffix);
+    return true;
+}
+bool handle_aeres(int peer_fd) {
+    int f_ID{0};
+    xnt f_Term{0}, ack{0};
+    bool yes_or_no{false};
+
+    if (!read_tcp(peer_fd, &f_ID, sizeof(f_ID))) return false;
+    if (!read_tcp(peer_fd, &f_Term, sizeof(f_Term))) return false;
+    if (!read_tcp(peer_fd, &ack, sizeof(ack))) return false;
+    if (!read_tcp(peer_fd, &yes_or_no, sizeof(yes_or_no))) return false;
+
+    onAERes(f_ID, f_Term, ack, yes_or_no);
+    return true;
+}
+bool handle_snap(int peer_fd) {
+    int leader_id{0};
+    xnt term{0}, snap_len{0};
+
+    if (!read_tcp(peer_fd, &leader_id, sizeof(leader_id))) return false;
+    if (!read_tcp(peer_fd, &term, sizeof(term))) return false;
+    if (!read_tcp(peer_fd, &snap_len, sizeof(snap_len))) return false;
+
+    string snap(snap_len, '\0');
+    if (snap_len && !read_tcp(peer_fd, &snap[0], snap_len)) return false;
+
+    onSnap(leader_id, term, snap);
     return true;
 }

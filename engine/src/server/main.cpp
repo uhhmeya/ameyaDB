@@ -8,6 +8,9 @@
 #include <string>
 #include <vector>
 #include <utility>
+#include <deque>
+#include <mutex>
+#include <condition_variable>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <arpa/inet.h>
@@ -26,7 +29,9 @@ atomic<xnt> log_index{0};
 vector<atomic<int>> my_fd_to;
 atomic<int> relay_fd{-1};
 atomic participating{false};
-static mutex peer_write_mutex;
+static mutex outbox_mutex[NUM_NODES];
+static condition_variable outbox_cv[NUM_NODES];
+static deque<string> outbox[NUM_NODES];
 
 // announce
 bool handle_write(int x);
@@ -34,6 +39,9 @@ bool handle_read(int x);
 bool handle_vreq(int x);
 bool handle_vres(int x);
 bool handle_ae(int x);
+bool handle_aeres(int x);
+bool handle_snap(int x);
+string db_state();
 void ensure_wal_is_open();
 void remove_temp_snap();
 void take_pics();
@@ -86,12 +94,13 @@ static int read_hello(int fd) {
     return (sender_id >= 0 && sender_id < NUM_NODES) ? sender_id : -1;
 }
 static void set_keepalive(int fd) {
-    int on = 1, idle = 5, intvl = 2, cnt = 3;
+    int on = 1, idle = 5, intvl = 2, cnt = 3, user_timeout = 3000;
     setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &on, sizeof(on));
 #ifdef __APPLE__
     setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &idle, sizeof(idle));
 #else
     setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(idle));
+    setsockopt(fd, IPPROTO_TCP, TCP_USER_TIMEOUT, &user_timeout, sizeof(user_timeout));
 #endif
     setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &intvl, sizeof(intvl));
     setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &cnt, sizeof(cnt));
@@ -158,6 +167,8 @@ static bool route_to_handler(int peerFD, char op) {
     else if (op == VREQ)  return handle_vreq(peerFD);
     else if (op == VRES)  return handle_vres(peerFD);
     else if (op == APPEND_ENTRIES) return handle_ae(peerFD);
+    else if (op == AERES) return handle_aeres(peerFD);
+    else if (op == SNAP)  return handle_snap(peerFD);
     return true;
 }
 
@@ -209,6 +220,11 @@ static bool handle_relay_msg(int fd, const string &msg) {
                              + to_string(myNodeID) + " " + CRASH_SCRIPT
                              + " " + to_string(myNodeID) + " " + to_string(secs);
         system(terminate_cmd.c_str());
+        return true;
+    }
+
+    if (msg.rfind("state", 0) == 0) {
+        send_to_relay("state", db_state());
         return true;
     }
 
@@ -270,9 +286,6 @@ static int initiate_to_peer(int peer_id) {
     const string host     = "node-" + to_string(peer_id) + "." + PEER_DOMAIN;
 
     while (true) {
-        // Re-resolve every attempt. Route53 rewrites these records whenever
-        // terraform replaces an instance, and the TTL is 60s -- caching the
-        // address once at startup would pin us to a dead IP for good.
         in_addr peer_ip{};
         if (!resolve_ipv4(host, peer_ip)) {
             sleep_for(milliseconds(backoff_ms));
@@ -343,18 +356,38 @@ bool Psend(int peer, const string &buf) {
     int fd = my_fd_to[peer].load();
     if (fd < 0) return false;
 
-    lock_guard g(peer_write_mutex);
-
-    size_t sent = 0;
-    while (sent < buf.size()) {
-        ssize_t w = write(fd, buf.data() + sent, buf.size() - sent);
-        if (w <= 0) {
-            if (w < 0 && errno == EINTR) continue;
-            return false;
-        }
-        sent += static_cast<size_t>(w);
+    {
+        lock_guard g(outbox_mutex[peer]);
+        if (outbox[peer].size() >= 1000) return false;
+        outbox[peer].push_back(buf);
     }
+    outbox_cv[peer].notify_one();
     return true;
+}
+
+static void drain_outbox_4ever(int peer) {
+    while (true) {
+        string buf;
+        {
+            unique_lock g(outbox_mutex[peer]);
+            outbox_cv[peer].wait(g, [peer] { return !outbox[peer].empty(); });
+            buf = std::move(outbox[peer].front());
+            outbox[peer].pop_front();
+        }
+
+        int fd = my_fd_to[peer].load();
+        if (fd < 0) continue;
+
+        size_t sent = 0;
+        while (sent < buf.size()) {
+            ssize_t w = write(fd, buf.data() + sent, buf.size() - sent);
+            if (w <= 0) {
+                if (w < 0 && errno == EINTR) continue;
+                break;
+            }
+            sent += static_cast<size_t>(w);
+        }
+    }
 }
 
 static void accept_clients_4ever(int listener) {
@@ -387,6 +420,12 @@ int main(int argc, char *argv[]) {
 
     my_fd_to = vector<atomic<int>>(NUM_NODES);
     for (auto &fd : my_fd_to) fd = -1;
+
+    for (int peer = 0; peer < NUM_NODES; ++peer) {
+        thread([peer] {
+            drain_outbox_4ever(peer);
+        }).detach();
+    }
 
     signal(SIGPIPE, SIG_IGN);
 
