@@ -7,13 +7,11 @@ const MAX_BACKOFF = 5000
 export const NUM_NODES = 5
 
 export type msg = {
-    node: number
-    life: number
-    seq: number
     wall_us: number
-    err_us: number
     type: string
     msg: string
+    born_dead_or_alive: number
+    compile_failed: boolean
 }
 
 export function useRelay(on_msg: (m: msg) => void) {

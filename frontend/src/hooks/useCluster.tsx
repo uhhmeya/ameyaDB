@@ -2,13 +2,13 @@ import { useCallback, useState } from 'react'
 import type { msg } from './useRelay.tsx'
 
 export function useCluster() {
-    const [hellos, setHellos] = useState(0)
+    const [born_dead_or_alive, setBornDeadOrAlive] = useState(0)
     const [compile_failed, setCompileFailed] = useState(false)
 
     const ingest = useCallback((m: msg) => {
-        if (m.type === 'hello') setHellos(prev => prev + 1)
-        if (m.type === 'compile') setCompileFailed(true)
+        setBornDeadOrAlive(m.born_dead_or_alive)
+        setCompileFailed(m.compile_failed)
     }, [])
 
-    return { hellos, compile_failed, ingest }
+    return { born_dead_or_alive, compile_failed, ingest }
 }

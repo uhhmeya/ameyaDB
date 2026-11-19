@@ -7,16 +7,16 @@ const COOLDOWN_MS = 10_000
 interface RunProps {
     connected: boolean
     send_msg: (data: unknown) => void
-    hellos: number
+    born_dead_or_alive: number
     compile_failed: boolean
 }
 
-function Run({ connected, send_msg, hellos, compile_failed }: RunProps) {
+function Run({ connected, send_msg, born_dead_or_alive, compile_failed }: RunProps) {
     const navigate = useNavigate()
     const [remaining, setRemaining] = useState(0)
     const next_allowed = useRef(0)
     const timer = useRef<number | null>(null)
-    const ready = hellos >= NUM_NODES
+    const ready = born_dead_or_alive >= NUM_NODES
 
     useEffect(() => {
         if (!connected) navigate('/')
@@ -29,7 +29,6 @@ function Run({ connected, send_msg, hellos, compile_failed }: RunProps) {
     const wait = (ms: number, onDone: () => void) => {
         next_allowed.current = Date.now() + ms
         setRemaining(ms)
-
         timer.current = window.setInterval(() => {
             const left = next_allowed.current - Date.now()
             if (left <= 0) {
@@ -61,7 +60,7 @@ function Run({ connected, send_msg, hellos, compile_failed }: RunProps) {
             ) : compile_failed ? (
                 <p className="hint">nodes failed to compile</p>
             ) : (
-                <p className="hint">not all nodes are being born dead ({hellos}/{NUM_NODES})</p>
+                <p className="hint">not all nodes are being born dead ({born_dead_or_alive}/{NUM_NODES})</p>
             )}
         </div>
     )

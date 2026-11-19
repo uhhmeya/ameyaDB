@@ -6,6 +6,7 @@ import time
 HOST = "0.0.0.0" # anyone can connect
 WS_PORT = 8765 # browser + testy
 TCP_PORT = 9000  # nodes
+EC2_PORT = 9001
 NUM_NODES = 5
 
 # handlers
@@ -13,90 +14,94 @@ relay_to_browser_WS = None
 relay_to_test_WS = None
 
 nodeFDtable = {}
-booted = set()
-# dead      : process is not running
-# born dead : process is running but the node is not in the cluster
-# alive     : node is participating in the cluster
+nodes_seen_before = set()
 state = {n: "dead" for n in range(NUM_NODES)}
+compile_failed = False
 
-def compute_cluster_status():
+def compute_health():
     alive = [n for n in state if state[n] == "alive"]
     born_dead = [n for n in state if state[n] == "born dead"]
     dead = [n for n in state if state[n] == "dead"]
     return f"alive {alive} born dead {born_dead} dead {dead}"
 
-async def inform_browser(status):
+async def inform_browser():
     try:
-        await relay_to_browser_WS.send(json.dumps({"type": "cluster", "msg": status, "wall_us": time.time_ns() // 1000}))
+        await relay_to_browser_WS.send(json.dumps({
+            "type": "cluster",
+            "msg": compute_health(),
+            "born_dead_or_alive": len([n for n in state if state[n] != "dead"]),
+            "compile_failed": compile_failed,
+            "wall_us": time.time_ns() // 1000,
+        }))
     except websockets.exceptions.ConnectionClosed:
         pass
 
-async def on_node(reader, writer):
+async def on_node_process(reader, writer):
     node_id = None
     try:
-
-        # get msg from node
         while True:
 
-            # handle death
-            try:
-                raw = await reader.readline()
-            except ConnectionResetError: raw = b""
-            if not raw:
+            # parse msg 1
+            try: very_raw_msg = await reader.readline()
+            except ConnectionResetError: very_raw_msg = b""
+
+            # handle FIN
+            if not very_raw_msg:
                 if node_id is not None:
                     state[node_id] = "dead"
-                    await inform_browser(compute_cluster_status())
+                    await inform_browser()
                 break
 
-            msg = raw.decode("utf-8", errors="replace").rstrip("\n")
-            if not msg: continue
-            data = json.loads(msg)
+            # parse msg 2
+            raw_msg = very_raw_msg.decode("utf-8", errors="replace").rstrip("\n")
+            if not raw_msg: continue
+            msg = json.loads(raw_msg)
 
 
-            # handle hello
-            if node_id is None and data.get("type") == "hello":
-                node_id = data["node"]
+            # handle hi
+            if node_id is None and msg.get("type") == "hello":
+                node_id = msg["node"]
                 nodeFDtable[node_id] = writer
 
-                # an alive node that only reconnected to the relay stays alive
+                # dead --> born dead
                 if state[node_id] == "dead":
                     state[node_id] = "born dead"
-                    await inform_browser(compute_cluster_status())
+                    await inform_browser()
 
-                    # first boot (testy isn't running yet)
-                    if node_id not in booted:
-                        booted.add(node_id)
+                    is_restart = node_id in nodes_seen_before
+                    nodes_seen_before.add(node_id)
 
                     # tell testy that node is born dead
-                    else:
-                        try:
-                            await relay_to_test_WS.send(json.dumps({"born_dead": node_id}))
-                        except websockets.exceptions.ConnectionClosed:
-                            pass
+                    if is_restart:
+                        try: await relay_to_test_WS.send(json.dumps({"born_dead": node_id}))
+                        except websockets.exceptions.ConnectionClosed: pass
 
             # alive --> node is in the cluster
-            if data.get("type") == "alive":
+            if msg.get("type") == "alive":
                 state[node_id] = "alive"
-                await inform_browser(compute_cluster_status())
+                await inform_browser()
 
             # node lost its tcp wire to a peer
-            if data.get("type") == "unreachable":
-                peer_id = int(data["msg"])
+            if msg.get("type") == "unreachable":
+                peer_id = int(msg["msg"])
                 if state[peer_id] == "alive":
                     # TODO ~ NODE IS SAYING IT CAN'T REACH AN ALIVE NODE!!! NETWORK PARTITION!!!
                     pass
 
-            # forward to browser
-            try:
-                await relay_to_browser_WS.send(msg)
-            except websockets.exceptions.ConnectionClosed:
-                pass
-
     finally:
-
-        # when node dies, its writer is removed from the FD table
         if nodeFDtable.get(node_id) is writer:
             del nodeFDtable[node_id]
+        writer.close()
+
+# tell browser if compile failed
+async def on_ec2(reader, writer):
+    global compile_failed
+    try:
+        raw_msg = await reader.readline()
+        if raw_msg and json.loads(raw_msg).get("type") == "compile":
+            compile_failed = True
+            await inform_browser()
+    finally:
         writer.close()
 
 async def on_browser(websocket):
@@ -140,8 +145,9 @@ async def main():
         print("relay & browser are connected", flush=True)
 
         # accept incoming con req from node
-        tcp_server = await asyncio.start_server(on_node, HOST, TCP_PORT)
-        async with tcp_server:
+        tcp_server = await asyncio.start_server(on_node_process, HOST, TCP_PORT)
+        ec2_server = await asyncio.start_server(on_ec2, HOST, EC2_PORT)
+        async with tcp_server, ec2_server:
             await tcp_server.serve_forever()
 
 if __name__ == "__main__":

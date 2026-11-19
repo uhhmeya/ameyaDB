@@ -143,7 +143,7 @@ resource "aws_security_group" "db_nodes" {
   # to report status. Only needs to allow traffic from inside the VPC.
   ingress {
     from_port   = 9000
-    to_port     = 9000
+    to_port     = 9001
     protocol    = "tcp"
     cidr_blocks = ["10.0.0.0/16"]
   }
@@ -318,7 +318,7 @@ test -d /home/ec2-user/ameyaDB/.git
 mkdir -p /home/ec2-user/ameyaDB/engine/src/output/EXEC
 cd /home/ec2-user/ameyaDB/engine/src/server
 g++ -std=c++20 -pthread -o /home/ec2-user/ameyaDB/engine/src/output/EXEC/server main.cpp handlers.cpp walsnap.cpp threads.cpp raft.cpp -lclockbound || {
-  echo '{"node":${count.index},"type":"compile","msg":"failed"}' > /dev/tcp/10.0.100.70/9000
+  echo '{"node":${count.index},"type":"compile","msg":"failed"}' > /dev/tcp/10.0.100.70/9001
   exit 1
 }
 
