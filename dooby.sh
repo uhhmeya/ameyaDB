@@ -110,7 +110,7 @@ echo "starting frontend..."
 FRONTEND_PID=$!
 echo "open this link to continue : http://localhost:5173"
 
-# order matters: relay.py keeps port 9000 closed until the browser attaches,
+# order matters: relay.py keeps ports 9000/9001 closed until the browser attaches,
 # and nodes only start after that — a node can never reach a browserless relay.
 settle $BASTION_ID
 # always stop -> start (never just "start if stopped"). A stop kills every

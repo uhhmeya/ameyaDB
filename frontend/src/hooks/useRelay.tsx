@@ -1,75 +1,66 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 const RELAY_URL = "ws://107.20.154.53:8765"
-const INITIAL_BACKOFF = 500
-const MAX_BACKOFF = 5000
+const INITIAL_BACKOFF_MS = 500
+const MAX_BACKOFF_MS = 5000
 
 export const NUM_NODES = 5
 
-export type msg = {
-    wall_us: number
-    type: string
-    msg: string
-    born_dead_or_alive: number
+export type ClusterUpdate = {
+    event: string
+    born_dead_or_participating: number
     compile_failed: boolean
+    wall_us: number
 }
 
-export function useRelay(on_msg: (m: msg) => void) {
+export function useRelay() {
     const wsRef = useRef<WebSocket | null>(null)
-    const backoffRef = useRef(INITIAL_BACKOFF)
-    const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const backoffRef = useRef(INITIAL_BACKOFF_MS)
+    const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const cancelledRef = useRef(false)
-    const on_msg_ref = useRef(on_msg)
-    on_msg_ref.current = on_msg
 
     const [connected, setConnected] = useState(false)
-    const [log, setLog] = useState<msg[]>([])
+    const [log, setLog] = useState<ClusterUpdate[]>([])
 
     useEffect(() => {
-        connect_to_relay()
-        return () => disconnect_from_relay()
+        connectToRelay()
+        return () => disconnectFromRelay()
     }, [])
 
-    function connect_to_relay() {
+    function connectToRelay() {
         cancelledRef.current = false
         const ws = new WebSocket(RELAY_URL)
         wsRef.current = ws
 
-        // relay accepts connection
         ws.onopen = () => {
-            backoffRef.current = INITIAL_BACKOFF
+            backoffRef.current = INITIAL_BACKOFF_MS
             setConnected(true)
         }
 
-        //! handle msg from relay
         ws.onmessage = (event) => {
-            const data: msg = JSON.parse(event.data)
-            setLog(prev => [...prev, data]) // calls ingest
-            on_msg_ref.current(data)
+            const update: ClusterUpdate = JSON.parse(event.data)
+            setLog(prev => [...prev, update])
         }
 
-        // can't connect to relay
+        // relay isn't up yet or went away: retry with backoff
         ws.onclose = () => {
-            if (wsRef.current !== ws) return // strict mode
+            if (wsRef.current !== ws) return // stale socket from strict mode's double mount
             setConnected(false)
             if (cancelledRef.current) return
-            timeoutRef.current = setTimeout(connect_to_relay, backoffRef.current)
-            backoffRef.current = Math.min(backoffRef.current * 2, MAX_BACKOFF)
+            retryTimerRef.current = setTimeout(connectToRelay, backoffRef.current)
+            backoffRef.current = Math.min(backoffRef.current * 2, MAX_BACKOFF_MS)
         }
     }
 
-    function disconnect_from_relay() {
+    function disconnectFromRelay() {
         cancelledRef.current = true
-        if (timeoutRef.current) clearTimeout(timeoutRef.current)
+        if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
         wsRef.current?.close()
     }
 
-    // sends msg to relay
-    const send_msg = useCallback((data: unknown) => {
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify(data))
-        }
-    }, [])
+    function sendMsg(data: unknown) {
+        wsRef.current?.send(JSON.stringify(data))
+    }
 
-    return { connected, log, send_msg }
+    return { connected, log, sendMsg }
 }

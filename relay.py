@@ -5,111 +5,92 @@ import time
 
 HOST = "0.0.0.0" # anyone can connect
 WS_PORT = 8765 # browser + testy
-TCP_PORT = 9000  # nodes
-EC2_PORT = 9001
+NODE_PORT = 9000 # node processes
+EC2_PORT = 9001 # an ec2's build script, only when compiling fails
 NUM_NODES = 5
 
 # handlers
-relay_to_browser_WS = None
-relay_to_test_WS = None
+browser_ws = None
+testy_ws = None
 
-nodeFDtable = {}
+node_writers = {}
 nodes_seen_before = set()
 state = {n: "dead" for n in range(NUM_NODES)}
 compile_failed = False
 
-def compute_health():
-    alive = [n for n in state if state[n] == "alive"]
-    born_dead = [n for n in state if state[n] == "born dead"]
-    dead = [n for n in state if state[n] == "dead"]
-    return f"alive {alive} born dead {born_dead} dead {dead}"
+async def send(ws, payload):
+    if ws is None: return
+    try: await ws.send(json.dumps(payload))
+    except websockets.exceptions.ConnectionClosed: pass
 
-async def inform_browser():
-    try:
-        await relay_to_browser_WS.send(json.dumps({
-            "type": "cluster",
-            "msg": compute_health(),
-            "born_dead_or_alive": len([n for n in state if state[n] != "dead"]),
-            "compile_failed": compile_failed,
-            "wall_us": time.time_ns() // 1000,
-        }))
-    except websockets.exceptions.ConnectionClosed:
-        pass
+async def inform_browser(event):
+    await send(browser_ws, {
+        "event": event,
+        "born_dead_or_participating": len([n for n in state if state[n] != "dead"]),
+        "compile_failed": compile_failed,
+        "wall_us": time.time_ns() // 1000,
+    })
+
+async def set_state(node_id, new_state):
+    state[node_id] = new_state
+    if len(set(state.values())) == 1:
+        await inform_browser(f"all nodes {new_state}")
+    else:
+        await inform_browser(f"{node_id} {new_state}")
 
 async def on_node_process(reader, writer):
     node_id = None
     try:
         while True:
+            try: line = await reader.readline()
+            except ConnectionResetError: line = b""
 
-            # parse msg 1
-            try: very_raw_msg = await reader.readline()
-            except ConnectionResetError: very_raw_msg = b""
-
-            # handle FIN
-            if not very_raw_msg:
-                if node_id is not None:
-                    state[node_id] = "dead"
-                    await inform_browser()
+            # FIN or RST
+            if not line:
+                await set_state(node_id, "dead")
                 break
 
-            # parse msg 2
-            raw_msg = very_raw_msg.decode("utf-8", errors="replace").rstrip("\n")
-            if not raw_msg: continue
-            msg = json.loads(raw_msg)
+            msg = json.loads(line)
 
-
-            # handle hi
-            if node_id is None and msg.get("type") == "hello":
+            if msg["type"] == "hello":
                 node_id = msg["node"]
-                nodeFDtable[node_id] = writer
+                node_writers[node_id] = writer
+                await set_state(node_id, "born dead")
 
-                # dead --> born dead
-                if state[node_id] == "dead":
-                    state[node_id] = "born dead"
-                    await inform_browser()
+                is_restart = node_id in nodes_seen_before
+                nodes_seen_before.add(node_id)
 
-                    is_restart = node_id in nodes_seen_before
-                    nodes_seen_before.add(node_id)
+                # tell testy that node is born dead
+                if is_restart:
+                    await send(testy_ws, {"born_dead": node_id})
 
-                    # tell testy that node is born dead
-                    if is_restart:
-                        try: await relay_to_test_WS.send(json.dumps({"born_dead": node_id}))
-                        except websockets.exceptions.ConnectionClosed: pass
+            elif msg["type"] == "participating":
+                await set_state(node_id, "participating")
 
-            # alive --> node is in the cluster
-            if msg.get("type") == "alive":
-                state[node_id] = "alive"
-                await inform_browser()
-
-            # node lost its tcp wire to a peer
-            if msg.get("type") == "unreachable":
+            elif msg["type"] == "unreachable":
                 peer_id = int(msg["msg"])
-                if state[peer_id] == "alive":
-                    # TODO ~ NODE IS SAYING IT CAN'T REACH AN ALIVE NODE!!! NETWORK PARTITION!!!
+                if state[peer_id] == "participating":
+                    # TODO : NETWORK PARTITION!!!
                     pass
 
     finally:
-        if nodeFDtable.get(node_id) is writer:
-            del nodeFDtable[node_id]
+        del node_writers[node_id]
         writer.close()
 
 # tell browser if compile failed
 async def on_ec2(reader, writer):
     global compile_failed
-    try:
-        raw_msg = await reader.readline()
-        if raw_msg and json.loads(raw_msg).get("type") == "compile":
-            compile_failed = True
-            await inform_browser()
-    finally:
-        writer.close()
+    msg = json.loads(await reader.readline())
+    compile_failed = True
+    await inform_browser(f"{msg['node']} failed to compile")
+    writer.close()
 
-async def on_browser(websocket):
-    global relay_to_browser_WS, relay_to_test_WS
+async def on_browser_or_testy(websocket):
+    global browser_ws, testy_ws
 
-    # assign handlers
-    if relay_to_browser_WS is None: relay_to_browser_WS = websocket
-    else: relay_to_test_WS = websocket
+    # the browser connects first, testy second
+    if browser_ws is None: browser_ws = websocket
+    else: testy_ws = websocket
 
     try:
         async for raw in websocket:
@@ -117,12 +98,11 @@ async def on_browser(websocket):
 
             # start test
             if data["to"] == "relay":
-                if data["msg"] == "run_test.py":
-                    await asyncio.create_subprocess_exec("python3", "test.py")
+                await asyncio.create_subprocess_exec("python3", "test.py")
 
             # forward msg to node
             else:
-                writer = nodeFDtable[data["to"]]
+                writer = node_writers[data["to"]]
                 writer.write((data["msg"] + "\n").encode())
                 await writer.drain()
 
@@ -130,27 +110,23 @@ async def on_browser(websocket):
         pass
 
     finally:
-        if relay_to_browser_WS is websocket:
-            relay_to_browser_WS = None
-        if relay_to_test_WS is websocket:
-            relay_to_test_WS = None
+        if browser_ws is websocket: browser_ws = None
+        if testy_ws is websocket: testy_ws = None
 
 async def main():
 
     # accept incoming con req from browser
-    async with websockets.serve(on_browser, HOST, WS_PORT):
-        while relay_to_browser_WS is None:
+    async with websockets.serve(on_browser_or_testy, HOST, WS_PORT):
+        while browser_ws is None:
             await asyncio.sleep(0.2)
 
         print("relay & browser are connected", flush=True)
 
-        # accept incoming con req from node
-        tcp_server = await asyncio.start_server(on_node_process, HOST, TCP_PORT)
+        # accept incoming con req from node processes and ec2 build scripts
+        node_server = await asyncio.start_server(on_node_process, HOST, NODE_PORT)
         ec2_server = await asyncio.start_server(on_ec2, HOST, EC2_PORT)
-        async with tcp_server, ec2_server:
-            await tcp_server.serve_forever()
+        async with node_server, ec2_server:
+            await node_server.serve_forever()
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-

@@ -1,15 +1,15 @@
-import type { msg } from '../hooks/useRelay.tsx'
+import type { ClusterUpdate } from '../hooks/useRelay.tsx'
 
-interface DebugProps {
-    log: msg[]
+type DebugProps = {
+    log: ClusterUpdate[]
 }
 
 function Debug({ log }: DebugProps) {
     return (
         <div className="fullscreen">
             <div className="events">
-                {log.filter(m => m.type === 'cluster').map((m, i) => (
-                    <div key={i}>{new Date(m.wall_us / 1000).toLocaleTimeString()} {m.msg}</div>
+                {log.map((update, i) => (
+                    <div key={i}>{new Date(update.wall_us / 1000).toLocaleTimeString()} → {update.event}</div>
                 ))}
             </div>
         </div>

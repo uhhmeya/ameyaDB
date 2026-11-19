@@ -139,8 +139,9 @@ resource "aws_security_group" "db_nodes" {
     cidr_blocks = ["10.0.0.0/16"]
   }
 
-  # Relay: nodes dial out to relay.py (listening on the bastion, port 9000)
-  # to report status. Only needs to allow traffic from inside the VPC.
+  # Relay: nodes dial out to relay.py (listening on the bastion) to report
+  # status on 9000; a node's build script reports compile failures on 9001.
+  # Only needs to allow traffic from inside the VPC.
   ingress {
     from_port   = 9000
     to_port     = 9001

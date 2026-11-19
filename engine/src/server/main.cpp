@@ -20,13 +20,12 @@
 #include "../headers/globals.h"
 #include "../headers/threads.h"
 
-//TODO ~ make browser display runtime or compile-time error that pops up on the ec2!
 
 int myNodeID;
 atomic<xnt> log_index{0};
 vector<atomic<int>> my_fd_to;
 atomic<int> relay_fd{-1};
-atomic alive{false};
+atomic participating{false};
 static mutex peer_write_mutex;
 
 // announce
@@ -195,7 +194,7 @@ static bool handle_relay_msg(int fd, const string &msg) {
         string connect_cmd = "sudo " + string(ALLOW_SCRIPT) + " "
                            + to_string(myNodeID) + " " + peers;
         system(connect_cmd.c_str());
-        alive = true;
+        participating = true;
         return true;
     }
 
@@ -203,8 +202,6 @@ static bool handle_relay_msg(int fd, const string &msg) {
     if (msg.rfind("terminate", 0) == 0) {
         int secs = (msg.size() > 10) ? stoi(msg.substr(10)) : 30;
 
-        // TODO ~ send_to_relay() appends nodeID to every message so stating the nodeID
-        //  in the body of the message is redundant.
         send_to_relay("crash", to_string(myNodeID) + " " + to_string(secs));
 
 
@@ -333,7 +330,6 @@ static void keep_initiator_on_wire(int peer_id) {
 
 // peers
 static void accept_4ever(int listener) {
-    // main thread parks here forever, accepting new peer connections
     while (true) {
         int peerFD = accept(listener, nullptr, nullptr);
         if (peerFD < 0) continue;
@@ -372,11 +368,6 @@ static void accept_clients_4ever(int listener) {
 // (k v) (fn ln tlr) (i t CRC)
 int main(int argc, char *argv[]) {
 
-    if (argc != 2) {
-        cerr << "usage: " << argv[0] << " <nodeID>\n";
-        return 1;
-    }
-
     myNodeID = stoi(argv[1]);
 
     connect_to_CB();
@@ -389,11 +380,10 @@ int main(int argc, char *argv[]) {
     while (relay_fd.load() == -1)
         sleep_for(milliseconds(50));
 
-    cout << "node is born dead\n";
-
-    while (!alive.load())
+    // test has started!
+    while (!participating.load())
         sleep_for(seconds(2));
-    send_to_relay("alive", "alive");
+    send_to_relay("participating", "participating");
 
     my_fd_to = vector<atomic<int>>(NUM_NODES);
     for (auto &fd : my_fd_to) fd = -1;

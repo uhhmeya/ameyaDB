@@ -29,33 +29,33 @@ async def raise_flags():
         if "born_dead" in msg:
             born_dead_flags[msg["born_dead"]].set()
 
-def sendWR(key, val):
+def encode_write(key, val):
     key, val = key.encode(), val.encode()
     return bytes([OP_WR]) + struct.pack("<I", len(key)) + key + struct.pack("<I", len(val)) + val
 
 def guess(node_id):
     return f"node-{node_id}.ameyadb.internal"
 
-async def run_client(cl_num):
+async def run_client(client_num):
 
     guess_node = guess(random.randrange(NUM_NODES))
     wr_num = 0
 
     while not is_test_over:
-        WR = None
+        writer = None
 
         try:
             conn = asyncio.open_connection(guess_node, CLIENT_PORT)
-            R, WR = await asyncio.wait_for(conn, timeout=2)
+            reader, writer = await asyncio.wait_for(conn, timeout=2)
 
             # send writes to leader
             while not is_test_over:
 
-                K = f"{cl_num}_{wr_num}"
-                V = f"v{random.randint(1, 999)}"
-                WR.write(sendWR(K, V))
+                key = f"{client_num}_{wr_num}"
+                val = f"v{random.randint(1, 999)}"
+                writer.write(encode_write(key, val))
 
-                reply = await asyncio.wait_for(R.readexactly(5), timeout=5)
+                reply = await asyncio.wait_for(reader.readexactly(5), timeout=5)
                 leader_status = reply[0]
 
                 if leader_status == I_AM_LEADER:
@@ -77,8 +77,8 @@ async def run_client(cl_num):
 
         finally:
 
-            if WR:
-                WR.close()
+            if writer:
+                writer.close()
             await asyncio.sleep(0.05)
 
 async def run():
@@ -98,7 +98,7 @@ async def run():
     await asyncio.sleep(5)
 
     for node_id in range(NUM_NODES):
-        await send_to_node(node_id, f"terminate 15") # terminate
+        await send_to_node(node_id, "terminate 15")
         await born_dead_flags[node_id].wait()
         await send_to_node(node_id, "connect all")
         await asyncio.sleep(10) # settle
