@@ -6,8 +6,19 @@ const MAX_BACKOFF_MS = 5000
 
 export const NUM_NODES = 5
 
+export type NodeResult = {
+    commit_idx: number
+    term: number
+}
+
+export type TestResults = {
+    nodes: (NodeResult | null)[]
+    agree: boolean
+}
+
 export type ClusterUpdate = {
-    event: string
+    event: string | null
+    results: TestResults | null
     born_dead_or_participating: number
     compile_failed: boolean
     wall_us: number

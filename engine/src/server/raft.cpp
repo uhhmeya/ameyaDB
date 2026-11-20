@@ -120,6 +120,11 @@ xnt get_cur_term() {
     return curTerm;
 }
 
+xnt get_commit_idx() {
+    lock_guard g(ROCK);
+    return commit_idx;
+}
+
 bool am_i_leader() {
     lock_guard g(ROCK);
     return role == LEADER;

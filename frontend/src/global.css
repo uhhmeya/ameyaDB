@@ -12,7 +12,7 @@ html, body {
 
 .fullscreen {
     width: 100vw;
-    height: 100vh;
+    min-height: 100vh;
     /* solid color instead of rgba - nothing behind it to blend with,
        and the solid reads a touch richer */
     background: #4f5fae;
@@ -119,12 +119,64 @@ html, body {
 .events {
     margin: 0;
     font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: clamp(1.5rem, 3vw, 2.5rem);
+    font-size: clamp(1rem, 1.9vw, 1.4rem);
     font-weight: 500;
-    line-height: 1.7;
+    line-height: 1.6;
+    letter-spacing: 0.02em;
+    color: rgba(255, 255, 255, 0.85);
+    animation: fade-up 0.5s ease both;
+}
+
+.results {
+    margin-top: clamp(1.5rem, 4vh, 3rem);
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: clamp(1.25rem, 2.4vw, 1.9rem);
+    font-weight: 500;
     letter-spacing: 0.02em;
     color: #fff;
     animation: fade-up 0.5s ease both;
+}
+
+.results table {
+    border-collapse: collapse;
+}
+
+.results th {
+    text-align: left;
+    font-size: 0.7em;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.7);
+    padding: 0 2em 0.6em 0;
+}
+
+.results td {
+    padding: 0.15em 1.5em 0.15em 0;
+}
+
+.agreement {
+    margin: 1em 0 0;
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    font-weight: 700;
+}
+
+.checkbox {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.3em;
+    height: 1.3em;
+    border: 3px solid currentColor;
+    border-radius: 8px;
+}
+
+.checkbox.agree {
+    color: #7bed9f;
+}
+
+.checkbox.disagree {
+    color: #ff7675;
 }
 
 @keyframes fade-up {
@@ -147,7 +199,8 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
     .instructions,
     .run-button,
-    .events {
+    .events,
+    .results {
         animation: none;
     }
     .command::after {

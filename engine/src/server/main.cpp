@@ -42,6 +42,7 @@ bool handle_ae(int x);
 bool handle_aeres(int x);
 bool handle_snap(int x);
 string db_state();
+xnt get_commit_idx();
 void ensure_wal_is_open();
 void remove_temp_snap();
 void take_pics();
@@ -196,6 +197,15 @@ static void serve_client(int fd) {
 }
 
 // relay
+static bool done_processing() {
+    for (int peer = 0; peer < NUM_NODES; ++peer) {
+        lock_guard g(outbox_mutex[peer]);
+        if (!outbox[peer].empty()) return false;
+    }
+    xnt commit_idx = get_commit_idx();
+    return get_applied_idx() == commit_idx && get_log_idx() == commit_idx;
+}
+
 static bool handle_relay_msg(int fd, const string &msg) {
     (void)fd;
 
@@ -223,8 +233,17 @@ static bool handle_relay_msg(int fd, const string &msg) {
         return true;
     }
 
-    if (msg.rfind("state", 0) == 0) {
-        send_to_relay("state", db_state());
+    if (msg.rfind("writes_stopped", 0) == 0) {
+        thread([] {
+            while (!done_processing())
+                sleep_for(milliseconds(50));
+            send_to_relay("done", "done");
+        }).detach();
+        return true;
+    }
+
+    if (msg.rfind("agreement_check_req", 0) == 0) {
+        send_to_relay("agreement_check_res", db_state());
         return true;
     }
 

@@ -17,17 +17,32 @@ IDK = 13
 
 relay_ws = None
 born_dead_flags = []
+done_flags = []
+db_state_flags = []
+db_states = {}
 is_test_over = False
 
 # testy --> relay --> node
 async def send_to_node(node_id, text):
     await relay_ws.send(json.dumps({"to": node_id, "msg": text}))
 
-async def raise_flags():
+async def send_to_browser(results):
+    await relay_ws.send(json.dumps({"to": "browser", "results": results}))
+
+async def listen_to_relay():
     async for raw in relay_ws:
         msg = json.loads(raw)
+
         if "born_dead" in msg:
+            await send_to_node(msg["born_dead"], "connect all")
             born_dead_flags[msg["born_dead"]].set()
+
+        elif "done" in msg:
+            done_flags[msg["done"]].set()
+
+        elif "agreement_check_res" in msg:
+            db_states[msg["node"]] = msg["agreement_check_res"]
+            db_state_flags[msg["node"]].set()
 
 def encode_write(key, val):
     key, val = key.encode(), val.encode()
@@ -98,9 +113,9 @@ async def run():
     await asyncio.sleep(5)
 
     for node_id in range(NUM_NODES):
+        born_dead_flags[node_id].clear()
         await send_to_node(node_id, "terminate 15")
         await born_dead_flags[node_id].wait()
-        await send_to_node(node_id, "connect all")
         await asyncio.sleep(10) # settle
 
     await asyncio.sleep(3)
@@ -109,18 +124,49 @@ async def run():
     is_test_over = True
     await asyncio.gather(*clients)
 
+    await check_agreement()
+
+async def wait_for_all(flags, timeout):
+    try: await asyncio.wait_for(asyncio.gather(*[flag.wait() for flag in flags]), timeout)
+    except asyncio.TimeoutError: pass
+
+async def check_agreement():
+
+    for node_id in range(NUM_NODES):
+        await send_to_node(node_id, "writes_stopped")
+    await wait_for_all(done_flags, 30)
+
+    for node_id in range(NUM_NODES):
+        await send_to_node(node_id, "agreement_check_req")
+    await wait_for_all(db_state_flags, 10)
+
+    nodes = []
+    digests = set()
+    for node_id in range(NUM_NODES):
+        if node_id in db_states:
+            commit_idx, term, num_keys, digest = db_states[node_id].split()
+            nodes.append({"commit_idx": int(commit_idx), "term": int(term)})
+            digests.add(digest)
+        else:
+            nodes.append(None)
+
+    agree = len(db_states) == NUM_NODES and len(digests) == 1
+    await send_to_browser({"nodes": nodes, "agree": agree})
+
 async def main():
     global relay_ws
 
     # connect to relay
     relay_ws = await websockets.connect(RELAY_WS_URL)
 
-    # create born_dead_flags array
+    # create flags
     for _ in range(NUM_NODES):
         born_dead_flags.append(asyncio.Event())
+        done_flags.append(asyncio.Event())
+        db_state_flags.append(asyncio.Event())
 
-    # notice when flags are raised
-    watcher = asyncio.create_task(raise_flags())
+    # listen to relay
+    watcher = asyncio.create_task(listen_to_relay())
 
     # run test
     await run()
