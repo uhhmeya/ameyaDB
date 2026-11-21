@@ -53,8 +53,14 @@ static string build_Vreq(xnt term, xnt log_idx, xnt last_log_term) {
     char buf[1 + sizeof(int) + 3 * sizeof(xnt)];
     buf[0] = VREQ;
     memcpy(&buf[1], &myNodeID, sizeof(myNodeID));
+
+    // term
     memcpy(&buf[1 + sizeof(int)], &term, sizeof(term));
+
+    // log idx
     memcpy(&buf[1 + sizeof(int) + sizeof(xnt)], &log_idx, sizeof(log_idx));
+
+    // last log term in old batch
     memcpy(&buf[1 + sizeof(int) + 2 * sizeof(xnt)], &last_log_term, sizeof(last_log_term));
     return string(buf, sizeof(buf));
 }
@@ -68,14 +74,14 @@ static string build_Vres(xnt term, bool yes_or_no) {
     return string(buf, sizeof(buf));
 }
 
-static string build_AE(xnt term, xnt prefix_len, xnt prefix_term, xnt leader_commit, const vector<entry> &suffix) {
+static string build_AE(xnt term, xnt last_log_idx_in_old_batch, xnt last_log_term_in_old_batch, xnt leader_commit, const vector<entry> &suffix) {
     char buf[1 + sizeof(int) + 5 * sizeof(xnt)];
     xnt n = suffix.size();
     buf[0] = APPEND_ENTRIES;
     memcpy(&buf[1], &myNodeID, sizeof(myNodeID));
     memcpy(&buf[1 + sizeof(int)], &term, sizeof(term));
-    memcpy(&buf[1 + sizeof(int) + sizeof(xnt)], &prefix_len, sizeof(prefix_len));
-    memcpy(&buf[1 + sizeof(int) + 2 * sizeof(xnt)], &prefix_term, sizeof(prefix_term));
+    memcpy(&buf[1 + sizeof(int) + sizeof(xnt)], &last_log_idx_in_old_batch, sizeof(last_log_idx_in_old_batch));
+    memcpy(&buf[1 + sizeof(int) + 2 * sizeof(xnt)], &last_log_term_in_old_batch, sizeof(last_log_term_in_old_batch));
     memcpy(&buf[1 + sizeof(int) + 3 * sizeof(xnt)], &leader_commit, sizeof(leader_commit));
     memcpy(&buf[1 + sizeof(int) + 4 * sizeof(xnt)], &n, sizeof(n));
 
@@ -171,11 +177,11 @@ static void set_new_deadline() {
 }
 
 static void replicate(int follower) {
-    xnt prefix_len = sent_len[follower];
-    xnt prefix_term = 0;
+    xnt last_log_idx_in_old_batch = sent_len[follower];
+    xnt last_log_term_in_old_batch = 0;
     vector<entry> suffix;
 
-    bool has_prefix = get_suffix(prefix_len, prefix_term, suffix);
+    bool has_prefix = get_suffix(last_log_idx_in_old_batch, last_log_term_in_old_batch, suffix);
 
     if (!has_prefix && steady_clock::now() - snap_sent[follower] > seconds(2)) {
         snap_sent[follower] = steady_clock::now();
@@ -183,7 +189,7 @@ static void replicate(int follower) {
         return;
     }
 
-    Psend(follower, build_AE(curTerm, prefix_len, prefix_term, commit_idx, suffix));
+    Psend(follower, build_AE(curTerm, last_log_idx_in_old_batch, last_log_term_in_old_batch, commit_idx, suffix));
 }
 
 static void commit_log_entries() {
@@ -296,7 +302,7 @@ bool onWrite(const string &k, const string &v) {
     return commit_idx >= idx && curTerm == term_when_WR;
 }
 
-void onAE(int leader_id, xnt term, xnt prefix_len, xnt prefix_term, xnt leader_commit, const vector<entry> &suffix) {
+void onAE(int leader_id, xnt term, xnt last_log_idx_in_old_batch, xnt last_log_term_in_old_batch, xnt leader_commit, const vector<entry> &suffix) {
 
     xnt term_when_AE;
     xnt ack = 0;
@@ -318,9 +324,9 @@ void onAE(int leader_id, xnt term, xnt prefix_len, xnt prefix_term, xnt leader_c
             set_new_deadline();
         }
 
-        if (term == curTerm && log_ok(prefix_len, prefix_term)) {
+        if (term == curTerm && log_ok(last_log_idx_in_old_batch, last_log_term_in_old_batch)) {
             append_entries(suffix);
-            ack = prefix_len + suffix.size();
+            ack = last_log_idx_in_old_batch + suffix.size();
             yes_or_no = true;
 
             xnt new_commit = min(leader_commit, ack);
@@ -330,7 +336,7 @@ void onAE(int leader_id, xnt term, xnt prefix_len, xnt prefix_term, xnt leader_c
             }
         } else {
             xnt log_len = get_log_idx();
-            ack = log_len < prefix_len ? log_len : commit_idx;
+            ack = log_len < last_log_idx_in_old_batch ? log_len : commit_idx;
         }
 
         term_when_AE = curTerm;

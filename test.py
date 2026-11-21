@@ -82,7 +82,7 @@ async def run_client(client_num):
                     guess_node = guess(leader_id)
                     break
 
-                else:  # idk (connect to random node)
+                else: # idk
                     guess_node = guess(random.randrange(NUM_NODES))
                     break
 
@@ -158,6 +158,7 @@ async def main():
 
     # connect to relay
     relay_ws = await websockets.connect(RELAY_WS_URL)
+    await relay_ws.send(json.dumps({"to": "relay", "msg": "i am testy"}))
 
     # create flags
     for _ in range(NUM_NODES):

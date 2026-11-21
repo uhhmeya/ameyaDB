@@ -12,7 +12,7 @@ int  who_is_leader();
 bool onWrite(const string& k, const string& v);
 void onVReq(int c_ID, xnt c_Term, xnt c_LogIDX, xnt c_LogTERM);
 void onVRes(int c_ID, xnt c_Term, bool was_vote_granted);
-void onAE(int leader_id, xnt term, xnt prefix_len, xnt prefix_term, xnt leader_commit, const vector<entry>& suffix);
+void onAE(int leader_id, xnt term, xnt last_log_idx_in_old_batch, xnt last_log_term_in_old_batch, xnt leader_commit, const vector<entry>& suffix);
 void onAERes(int f_ID, xnt f_Term, xnt ack, bool yes_or_no);
 void onSnap(int leader_id, xnt term, const string& snap);
 
@@ -137,12 +137,12 @@ bool handle_vres(int peer_fd) {
 }
 bool handle_ae(int peer_fd) {
     int leader_id{0};
-    xnt term{0}, prefix_len{0}, prefix_term{0}, leader_commit{0}, n{0};
+    xnt term{0}, last_log_idx_in_old_batch{0}, last_log_term_in_old_batch{0}, leader_commit{0}, n{0};
 
     if (!read_tcp(peer_fd, &leader_id, sizeof(leader_id))) return false;
     if (!read_tcp(peer_fd, &term, sizeof(term))) return false;
-    if (!read_tcp(peer_fd, &prefix_len, sizeof(prefix_len))) return false;
-    if (!read_tcp(peer_fd, &prefix_term, sizeof(prefix_term))) return false;
+    if (!read_tcp(peer_fd, &last_log_idx_in_old_batch, sizeof(last_log_idx_in_old_batch))) return false;
+    if (!read_tcp(peer_fd, &last_log_term_in_old_batch, sizeof(last_log_term_in_old_batch))) return false;
     if (!read_tcp(peer_fd, &leader_commit, sizeof(leader_commit))) return false;
     if (!read_tcp(peer_fd, &n, sizeof(n))) return false;
 
@@ -153,7 +153,7 @@ bool handle_ae(int peer_fd) {
         suffix.push_back(*e);
     }
 
-    onAE(leader_id, term, prefix_len, prefix_term, leader_commit, suffix);
+    onAE(leader_id, term, last_log_idx_in_old_batch, last_log_term_in_old_batch, leader_commit, suffix);
     return true;
 }
 bool handle_aeres(int peer_fd) {

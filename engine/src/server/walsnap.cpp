@@ -318,23 +318,23 @@ void get_log_idx_and_last_log_term(xnt &index, xnt &term) {
     }
 }
 
-bool log_ok(xnt prefix_len, xnt prefix_term) {
+bool log_ok(xnt last_log_idx_in_old_batch, xnt last_log_term_in_old_batch) {
     lock_guard lock(log_mutex);
-    if (snap_index + log_vector.size() < prefix_len) return false;
-    return prefix_len <= snap_index || term_at(prefix_len) == prefix_term;
+    if (snap_index + log_vector.size() < last_log_idx_in_old_batch) return false;
+    return last_log_idx_in_old_batch <= snap_index || term_at(last_log_idx_in_old_batch) == last_log_term_in_old_batch;
 }
 
-bool get_suffix(xnt &prefix_len, xnt &prefix_term, vector<entry> &suffix) {
+bool get_suffix(xnt &last_log_idx_in_old_batch, xnt &last_log_term_in_old_batch, vector<entry> &suffix) {
     lock_guard lock(log_mutex);
 
-    if (prefix_len < snap_index) {
-        prefix_len  = snap_index;
-        prefix_term = snap_term;
+    if (last_log_idx_in_old_batch < snap_index) {
+        last_log_idx_in_old_batch  = snap_index;
+        last_log_term_in_old_batch = snap_term;
         return false;
     }
 
-    prefix_term = term_at(prefix_len);
-    for (xnt i = prefix_len - snap_index; i < log_vector.size() && suffix.size() < 1000; i++)
+    last_log_term_in_old_batch = term_at(last_log_idx_in_old_batch);
+    for (xnt i = last_log_idx_in_old_batch - snap_index; i < log_vector.size() && suffix.size() < 1000; i++)
         suffix.push_back(log_vector[i]);
     return true;
 }

@@ -10,7 +10,7 @@ EC2_PORT = 9001 # an ec2's build script, only when compiling fails
 NUM_NODES = 5
 
 # handlers
-browser_ws = None
+browsers = set()
 testy_ws = None
 
 node_writers = {}
@@ -32,13 +32,15 @@ async def send_to_node(node_id, text):
     except ConnectionError: pass
 
 async def inform_browser(event=None, results=None):
-    await send(browser_ws, {
+    payload = {
         "event": event,
         "results": results,
         "born_dead_or_participating": len([n for n in state if state[n] != "dead"]),
         "compile_failed": compile_failed,
         "wall_us": time.time_ns() // 1000,
-    })
+    }
+    for browser_ws in list(browsers):
+        await send(browser_ws, payload)
 
 async def on_node_process(reader, writer):
     node_id = None
@@ -98,18 +100,21 @@ async def on_ec2(reader, writer):
     writer.close()
 
 async def on_browser_or_testy(websocket):
-    global browser_ws, testy_ws
+    global testy_ws
 
-    # the browser connects first, testy second
-    if browser_ws is None: browser_ws = websocket
-    else: testy_ws = websocket
+    browsers.add(websocket)
+    await inform_browser()
 
     try:
         async for raw in websocket:
             data = json.loads(raw)
 
+            if data["to"] == "relay" and data["msg"] == "i am testy":
+                browsers.discard(websocket)
+                testy_ws = websocket
+
             # start test
-            if data["to"] == "relay":
+            elif data["to"] == "relay":
                 await asyncio.create_subprocess_exec("python3", "test.py")
 
             elif data["to"] == "browser":
@@ -123,14 +128,14 @@ async def on_browser_or_testy(websocket):
         pass
 
     finally:
-        if browser_ws is websocket: browser_ws = None
+        browsers.discard(websocket)
         if testy_ws is websocket: testy_ws = None
 
 async def main():
 
     # accept incoming con req from browser
     async with websockets.serve(on_browser_or_testy, HOST, WS_PORT):
-        while browser_ws is None:
+        while not browsers:
             await asyncio.sleep(0.2)
 
         print("relay & browser are connected", flush=True)

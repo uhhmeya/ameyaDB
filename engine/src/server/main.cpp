@@ -205,7 +205,6 @@ static bool done_processing() {
     xnt commit_idx = get_commit_idx();
     return get_applied_idx() == commit_idx && get_log_idx() == commit_idx;
 }
-
 static bool handle_relay_msg(int fd, const string &msg) {
     (void)fd;
 
@@ -298,7 +297,6 @@ static int initiate_to_relay(const string &host, int port) {
         backoff_ms = min(backoff_ms * 2, 3000);
     }
 }
-
 static int initiate_to_peer(int peer_id) {
     int backoff_ms = 100;
     const int    peerPort = 8080 + peer_id;
@@ -432,7 +430,6 @@ int main(int argc, char *argv[]) {
     while (relay_fd.load() == -1)
         sleep_for(milliseconds(50));
 
-    // test has started!
     while (!participating.load())
         sleep_for(seconds(2));
     send_to_relay("participating", "participating");
