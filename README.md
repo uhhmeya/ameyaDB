@@ -18,17 +18,12 @@ during various raft edge cases
 5. Found that if you grab dirty keys when building the snap and a crash occurs, then there's a race window where a write can be applied without the key being marked dirty. (data loss)
 6. Found that terminating a process is not enough to simulate crash since the kernel cleanly closes sockets & FINs every peer. Fixed by jumping an IPTABLES chain off both INPUT & OUTPUT hooks to drop mesh traffic before the kill, destroying FIN/RST packets & Requiring the nodes to infer death from timeout – correctly simulating real crash behavior
 
-# Problem Solving!
-If node **B** dies while connected to node **A**, then **A** reports to the observer that **A<->B** is broken.
-A connection breaks either when a node dies or when the network fails.
-I assumed that if the network is healthy, and **A** reports that **A<->B** is broken, then **B** must necessarily be dead.
-This is wrong because there is a delay between when A<->B breaks, and when A notices that A<->B is broken
-When A<->B is broken because B dies, B can reconnect to **A** before **A** can notice that the original connection was broken
-The error above caused a bug where the observer received a false report
-I fixed this by removing the firewalls in the crash script between the nodes and the observer.
-I fixed this by giving the observer its own death signal. I removed the firewall in the crash script between the node 
-and the observer so that it now receives a crashing node's FIN packet. This confirms a node's death to the observer while
-still leaving it ambiguous to the cluster, correctly simulating real crash behavior. 
+# Problem Solving
+I wrongly thought that if node B report's that its connection with A breaks while there is no network issue, then that
+must mean that A died. This is false because there is a delay between when a tcp connection breaks, and when the node notices.
+This caused a bug where a quick reconnect caused a node to falsely report a death. I fixed this by updating the firewall
+so that it blocks the FIN packets sent to its peers but not the relay. This lets the relay know which nodes are dead or alive
+without the clumsy report system!
 
 # usage
 1. download project & cd to it
@@ -52,6 +47,12 @@ To simulate real crash behavior, the ec2s create a firewall before they terminat
 The firewall blocks a FIN packet from being sent to the cluster by blocking ports 8080-8084. This means it
 will still send a FIN packet to the relay before the process dies. Therefore, if a node is not connected to the 
 relay, it is certainly dead. 
+
+
+
+
+
+
 
 
 

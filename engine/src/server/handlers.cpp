@@ -13,7 +13,7 @@ bool onWrite(const string& k, const string& v);
 void onVReq(int c_ID, xnt c_Term, xnt c_LogIDX, xnt c_LogTERM);
 void onVRes(int c_ID, xnt c_Term, bool was_vote_granted);
 void onAE(int leader_id, xnt term, xnt last_log_idx_in_old_batch, xnt last_log_term_in_old_batch, xnt leader_commit, const vector<entry>& suffix);
-void onAERes(int f_ID, xnt f_Term, xnt ack, bool yes_or_no);
+void onAERes(int f_ID, xnt f_Term, xnt ack, bool was_ae_accepted);
 void onSnap(int leader_id, xnt term, const string& snap);
 
 // helpers
@@ -159,14 +159,14 @@ bool handle_ae(int peer_fd) {
 bool handle_aeres(int peer_fd) {
     int f_ID{0};
     xnt f_Term{0}, ack{0};
-    bool yes_or_no{false};
+    bool was_ae_accepted{false};
 
     if (!read_tcp(peer_fd, &f_ID, sizeof(f_ID))) return false;
     if (!read_tcp(peer_fd, &f_Term, sizeof(f_Term))) return false;
     if (!read_tcp(peer_fd, &ack, sizeof(ack))) return false;
-    if (!read_tcp(peer_fd, &yes_or_no, sizeof(yes_or_no))) return false;
+    if (!read_tcp(peer_fd, &was_ae_accepted, sizeof(was_ae_accepted))) return false;
 
-    onAERes(f_ID, f_Term, ack, yes_or_no);
+    onAERes(f_ID, f_Term, ack, was_ae_accepted);
     return true;
 }
 bool handle_snap(int peer_fd) {

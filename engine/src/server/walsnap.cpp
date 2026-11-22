@@ -320,22 +320,28 @@ void get_log_idx_and_last_log_term(xnt &index, xnt &term) {
 
 bool log_ok(xnt last_log_idx_in_old_batch, xnt last_log_term_in_old_batch) {
     lock_guard lock(log_mutex);
-    if (snap_index + log_vector.size() < last_log_idx_in_old_batch) return false;
+    xnt my_log_idx = snap_index + log_vector.size();
+    if (my_log_idx < last_log_idx_in_old_batch) return false;
     return last_log_idx_in_old_batch <= snap_index || term_at(last_log_idx_in_old_batch) == last_log_term_in_old_batch;
 }
+
 
 bool get_suffix(xnt &last_log_idx_in_old_batch, xnt &last_log_term_in_old_batch, vector<entry> &suffix) {
     lock_guard lock(log_mutex);
 
-    if (last_log_idx_in_old_batch < snap_index) {
+    bool suffix_starts_in_snap = last_log_idx_in_old_batch < snap_index;
+    if (suffix_starts_in_snap) {
         last_log_idx_in_old_batch  = snap_index;
         last_log_term_in_old_batch = snap_term;
         return false;
     }
 
     last_log_term_in_old_batch = term_at(last_log_idx_in_old_batch);
-    for (xnt i = last_log_idx_in_old_batch - snap_index; i < log_vector.size() && suffix.size() < 1000; i++)
-        suffix.push_back(log_vector[i]);
+
+    xnt first_pos = last_log_idx_in_old_batch - snap_index;
+    for (xnt pos = first_pos; pos < log_vector.size() && suffix.size() < 1000; pos++)
+        suffix.push_back(log_vector[pos]);
+
     return true;
 }
 

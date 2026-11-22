@@ -74,7 +74,8 @@ static string build_Vres(xnt term, bool yes_or_no) {
     return string(buf, sizeof(buf));
 }
 
-static string build_AE(xnt term, xnt last_log_idx_in_old_batch, xnt last_log_term_in_old_batch, xnt leader_commit, const vector<entry> &suffix) {
+static string build_AE(xnt term, xnt last_log_idx_in_old_batch, xnt last_log_term_in_old_batch,
+    xnt leader_commit, const vector<entry> &suffix) {
     char buf[1 + sizeof(int) + 5 * sizeof(xnt)];
     xnt n = suffix.size();
     buf[0] = APPEND_ENTRIES;
@@ -101,13 +102,13 @@ static string build_AE(xnt term, xnt last_log_idx_in_old_batch, xnt last_log_ter
     return msg;
 }
 
-static string build_AEres(xnt term, xnt ack, bool yes_or_no) {
+static string build_AEres(xnt term, xnt ack, bool was_ae_accepted) {
     char buf[1 + sizeof(int) + 2 * sizeof(xnt) + 1];
     buf[0] = AERES;
     memcpy(&buf[1], &myNodeID, sizeof(myNodeID));
     memcpy(&buf[1 + sizeof(int)], &term, sizeof(term));
     memcpy(&buf[1 + sizeof(int) + sizeof(xnt)], &ack, sizeof(ack));
-    buf[1 + sizeof(int) + 2 * sizeof(xnt)] = yes_or_no ? 1 : 0;
+    buf[1 + sizeof(int) + 2 * sizeof(xnt)] = was_ae_accepted ? 1 : 0;
     return string(buf, sizeof(buf));
 }
 
@@ -288,30 +289,30 @@ bool onWrite(const string &k, const string &v) {
     if (role != LEADER) return false;
 
     xnt term_when_WR = curTerm;
-    xnt idx = append_entry(k, v, curTerm);
-    ack_len[myNodeID] = idx;
+    xnt log_idx = append_entry(k, v, curTerm);
+    ack_len[myNodeID] = log_idx;
 
     for (int node = 0; node < NUM_NODES; node++) {
-        if (node == myNodeID || sent_len[node] != idx - 1) continue;
+        if (node == myNodeID || sent_len[node] != log_idx - 1) continue;
         replicate(node);
     }
 
-    for (int tries = 0; tries < 40 && commit_idx < idx && curTerm == term_when_WR; tries++)
+    for (int tries = 0; tries < 40 && commit_idx < log_idx && curTerm == term_when_WR; tries++)
         committed.wait_for(g, milliseconds(50));
 
-    return commit_idx >= idx && curTerm == term_when_WR;
+    return commit_idx >= log_idx && curTerm == term_when_WR;
 }
 
-void onAE(int leader_id, xnt term, xnt last_log_idx_in_old_batch, xnt last_log_term_in_old_batch, xnt leader_commit, const vector<entry> &suffix) {
+void onAE(int leader_id, xnt term, xnt last_log_idx_in_old_batch, xnt last_log_term_in_old_batch,
+    xnt leader_commit, const vector<entry> &suffix) {
 
     xnt term_when_AE;
     xnt ack = 0;
-    bool yes_or_no = false;
+    bool are_we_accepting_ae = false;
 
     {
         lock_guard g(ROCK);
 
-        // update
         if (term > curTerm) {
             curTerm = term;
             votedFor = NO_VOTE;
@@ -327,7 +328,7 @@ void onAE(int leader_id, xnt term, xnt last_log_idx_in_old_batch, xnt last_log_t
         if (term == curTerm && log_ok(last_log_idx_in_old_batch, last_log_term_in_old_batch)) {
             append_entries(suffix);
             ack = last_log_idx_in_old_batch + suffix.size();
-            yes_or_no = true;
+            are_we_accepting_ae = true;
 
             xnt new_commit = min(leader_commit, ack);
             if (new_commit > commit_idx) {
@@ -342,10 +343,10 @@ void onAE(int leader_id, xnt term, xnt last_log_idx_in_old_batch, xnt last_log_t
         term_when_AE = curTerm;
     }
 
-    Psend(leader_id, build_AEres(term_when_AE, ack, yes_or_no));
+    Psend(leader_id, build_AEres(term_when_AE, ack, are_we_accepting_ae));
 }
 
-void onAERes(int f_ID, xnt f_Term, xnt ack, bool yes_or_no) {
+void onAERes(int f_ID, xnt f_Term, xnt ack, bool was_ae_accepted) {
     lock_guard g(ROCK);
 
     if (f_Term < curTerm)
@@ -364,7 +365,9 @@ void onAERes(int f_ID, xnt f_Term, xnt ack, bool yes_or_no) {
     if (role != LEADER || f_ID < 0 || f_ID >= NUM_NODES)
         return;
 
-    if (yes_or_no && ack >= ack_len[f_ID]) {
+    // TODO ~ rename ACK!
+    // ack is the log index of the follower on the happy path
+    if (was_ae_accepted && ack >= ack_len[f_ID]) {
         bool progress = ack > ack_len[f_ID];
         sent_len[f_ID] = ack;
         ack_len[f_ID] = ack;
@@ -372,7 +375,7 @@ void onAERes(int f_ID, xnt f_Term, xnt ack, bool yes_or_no) {
 
         if (progress && ack < get_log_idx())
             replicate(f_ID);
-    } else if (!yes_or_no && sent_len[f_ID] > ack) {
+    } else if (!was_ae_accepted && sent_len[f_ID] > ack) {
         sent_len[f_ID] = ack;
         replicate(f_ID);
     }
@@ -382,7 +385,7 @@ void onSnap(int leader_id, xnt term, const string &snap) {
 
     xnt term_when_SNAP;
     xnt ack = 0;
-    bool yes_or_no = false;
+    bool was_ae_accepted = false;
 
     {
         lock_guard g(ROCK);
@@ -398,14 +401,14 @@ void onSnap(int leader_id, xnt term, const string &snap) {
             leader = leader_id;
             ack = install_snap(snap);
             commit_idx = max(commit_idx, ack);
-            yes_or_no = true;
+            was_ae_accepted = true;
             set_new_deadline();
         }
 
         term_when_SNAP = curTerm;
     }
 
-    Psend(leader_id, build_AEres(term_when_SNAP, ack, yes_or_no));
+    Psend(leader_id, build_AEres(term_when_SNAP, ack, was_ae_accepted));
 }
 
 void onVReq(int c_ID, xnt c_Term, xnt c_LogIDX, xnt c_LogTERM) {
