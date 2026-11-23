@@ -42,11 +42,6 @@ chmod +x dooby.sh && ./dooby.sh
 # ./dooby.sh --fresh
 run this everytime terraform/dooby/packer is updated
 
-# In Raft, you have to infer death but this is how you can know for sure!
-To simulate real crash behavior, the ec2s create a firewall before they terminate the process running on it. 
-The firewall blocks a FIN packet from being sent to the cluster by blocking ports 8080-8084. This means it
-will still send a FIN packet to the relay before the process dies. Therefore, if a node is not connected to the 
-relay, it is certainly dead. 
 
 
 

@@ -61,6 +61,7 @@ enum Status : uint8_t {
 // sentinels
 inline constexpr int NO_LEADER = -1;
 inline constexpr int NO_VOTE   = -1;
+inline const string  NO_OP     = "~no_op~";
 
 // global variables
 extern int myNodeID;
@@ -113,5 +114,6 @@ bool log_ok(xnt last_log_idx_in_old_batch, xnt last_log_term_in_old_batch);
 bool get_suffix(xnt &last_log_idx_in_old_batch, xnt &last_log_term_in_old_batch, vector<entry> &suffix);
 xnt get_term(xnt idx);
 xnt get_applied_idx();
+xnt get_oldest_idx_a_follower_needs();
 string read_snap();
 xnt install_snap(const string& snap);

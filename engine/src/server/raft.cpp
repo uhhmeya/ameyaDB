@@ -13,6 +13,7 @@
 #include <random>
 # include <thread>
 #include <algorithm>
+#include <limits>
 
 enum Raft_Role {
     FOLLOWER,
@@ -34,6 +35,7 @@ static int votedFor;
 static int leader;
 static Raft_Role role;
 static xnt commit_idx;
+static xnt leaders_commit_idx;
 static unordered_set<int> in_votes;
 static vector<xnt> sent_len;
 static vector<xnt> ack_len;
@@ -102,12 +104,12 @@ static string build_AE(xnt term, xnt last_log_idx_in_old_batch, xnt last_log_ter
     return msg;
 }
 
-static string build_AEres(xnt term, xnt ack, bool was_ae_accepted) {
+static string build_AEres(xnt term, xnt last_log_idx_in_next_old_batch, bool was_ae_accepted) {
     char buf[1 + sizeof(int) + 2 * sizeof(xnt) + 1];
     buf[0] = AERES;
     memcpy(&buf[1], &myNodeID, sizeof(myNodeID));
     memcpy(&buf[1 + sizeof(int)], &term, sizeof(term));
-    memcpy(&buf[1 + sizeof(int) + sizeof(xnt)], &ack, sizeof(ack));
+    memcpy(&buf[1 + sizeof(int) + sizeof(xnt)], &last_log_idx_in_next_old_batch, sizeof(last_log_idx_in_next_old_batch));
     buf[1 + sizeof(int) + 2 * sizeof(xnt)] = was_ae_accepted ? 1 : 0;
     return string(buf, sizeof(buf));
 }
@@ -140,6 +142,27 @@ bool am_i_leader() {
 int who_is_leader() {
     lock_guard g(ROCK);
     return leader;
+}
+
+// follower is only done once it has everything the leader committed
+bool am_i_caught_up() {
+    lock_guard g(ROCK);
+    return role == LEADER || commit_idx >= leaders_commit_idx;
+}
+
+// leader can't cut entries a connected follower still needs
+xnt get_oldest_idx_a_follower_needs() {
+    lock_guard g(ROCK);
+
+    xnt oldest_idx = numeric_limits<xnt>::max();
+    if (role != LEADER) return oldest_idx;
+
+    for (int node = 0; node < NUM_NODES; node++) {
+        bool is_connected = my_fd_to[node].load() >= 0;
+        if (node == myNodeID || !is_connected) continue;
+        oldest_idx = min(oldest_idx, sent_len[node]);
+    }
+    return oldest_idx;
 }
 
 static void broadcast(const string &msg) {
@@ -182,11 +205,19 @@ static void replicate(int follower) {
     xnt last_log_term_in_old_batch = 0;
     vector<entry> suffix;
 
-    bool has_prefix = get_suffix(last_log_idx_in_old_batch, last_log_term_in_old_batch, suffix);
+    bool suffix_starts_in_snap = !get_suffix(last_log_idx_in_old_batch, last_log_term_in_old_batch, suffix);
+    bool snap_sent_recently = steady_clock::now() - snap_sent[follower] <= seconds(10);
+    bool is_connected = my_fd_to[follower].load() >= 0;
 
-    if (!has_prefix && steady_clock::now() - snap_sent[follower] > seconds(2)) {
+    // installs take seconds, resending sooner makes followers install snaps back to back
+    if (suffix_starts_in_snap && !snap_sent_recently && is_connected) {
         snap_sent[follower] = steady_clock::now();
-        Psend(follower, build_SNAP(curTerm, read_snap()));
+
+        // read snap off ROCK, a big snap read freezes heartbeats and starts elections
+        xnt term_when_SNAP = curTerm;
+        thread([follower, term_when_SNAP] {
+            Psend(follower, build_SNAP(term_when_SNAP, read_snap()));
+        }).detach();
         return;
     }
 
@@ -274,6 +305,7 @@ void raft_init() {
     leader = NO_LEADER;
     in_votes.clear();
     commit_idx = get_applied_idx();
+    leaders_commit_idx = 0;
     sent_len.assign(NUM_NODES, 0);
     ack_len.assign(NUM_NODES, 0);
     snap_sent.assign(NUM_NODES, steady_clock::time_point{});
@@ -307,7 +339,7 @@ void onAE(int leader_id, xnt term, xnt last_log_idx_in_old_batch, xnt last_log_t
     xnt leader_commit, const vector<entry> &suffix) {
 
     xnt term_when_AE;
-    xnt ack = 0;
+    xnt last_log_idx_in_next_old_batch = 0;
     bool are_we_accepting_ae = false;
 
     {
@@ -322,31 +354,32 @@ void onAE(int leader_id, xnt term, xnt last_log_idx_in_old_batch, xnt last_log_t
         if (term == curTerm) {
             role = FOLLOWER;
             leader = leader_id;
+            leaders_commit_idx = leader_commit;
             set_new_deadline();
         }
 
         if (term == curTerm && log_ok(last_log_idx_in_old_batch, last_log_term_in_old_batch)) {
             append_entries(suffix);
-            ack = last_log_idx_in_old_batch + suffix.size();
+            last_log_idx_in_next_old_batch = last_log_idx_in_old_batch + suffix.size();
             are_we_accepting_ae = true;
 
-            xnt new_commit = min(leader_commit, ack);
+            xnt new_commit = min(leader_commit, last_log_idx_in_next_old_batch);
             if (new_commit > commit_idx) {
                 apply_entries(new_commit);
                 commit_idx = new_commit;
             }
         } else {
             xnt log_len = get_log_idx();
-            ack = log_len < last_log_idx_in_old_batch ? log_len : commit_idx;
+            last_log_idx_in_next_old_batch = log_len < last_log_idx_in_old_batch ? log_len : commit_idx;
         }
 
         term_when_AE = curTerm;
     }
 
-    Psend(leader_id, build_AEres(term_when_AE, ack, are_we_accepting_ae));
+    Psend(leader_id, build_AEres(term_when_AE, last_log_idx_in_next_old_batch, are_we_accepting_ae));
 }
 
-void onAERes(int f_ID, xnt f_Term, xnt ack, bool was_ae_accepted) {
+void onAERes(int f_ID, xnt f_Term, xnt last_log_idx_in_next_old_batch, bool was_ae_accepted) {
     lock_guard g(ROCK);
 
     if (f_Term < curTerm)
@@ -365,18 +398,16 @@ void onAERes(int f_ID, xnt f_Term, xnt ack, bool was_ae_accepted) {
     if (role != LEADER || f_ID < 0 || f_ID >= NUM_NODES)
         return;
 
-    // TODO ~ rename ACK!
-    // ack is the log index of the follower on the happy path
-    if (was_ae_accepted && ack >= ack_len[f_ID]) {
-        bool progress = ack > ack_len[f_ID];
-        sent_len[f_ID] = ack;
-        ack_len[f_ID] = ack;
+    if (was_ae_accepted && last_log_idx_in_next_old_batch >= ack_len[f_ID]) {
+        bool progress = last_log_idx_in_next_old_batch > ack_len[f_ID];
+        sent_len[f_ID] = last_log_idx_in_next_old_batch;
+        ack_len[f_ID] = last_log_idx_in_next_old_batch;
         commit_log_entries();
 
-        if (progress && ack < get_log_idx())
+        if (progress && last_log_idx_in_next_old_batch < get_log_idx())
             replicate(f_ID);
-    } else if (!was_ae_accepted && sent_len[f_ID] > ack) {
-        sent_len[f_ID] = ack;
+    } else if (!was_ae_accepted && sent_len[f_ID] > last_log_idx_in_next_old_batch) {
+        sent_len[f_ID] = last_log_idx_in_next_old_batch;
         replicate(f_ID);
     }
 }
@@ -384,7 +415,7 @@ void onAERes(int f_ID, xnt f_Term, xnt ack, bool was_ae_accepted) {
 void onSnap(int leader_id, xnt term, const string &snap) {
 
     xnt term_when_SNAP;
-    xnt ack = 0;
+    xnt last_log_idx_in_next_old_batch = 0;
     bool was_ae_accepted = false;
 
     {
@@ -399,8 +430,8 @@ void onSnap(int leader_id, xnt term, const string &snap) {
         if (term == curTerm) {
             role = FOLLOWER;
             leader = leader_id;
-            ack = install_snap(snap);
-            commit_idx = max(commit_idx, ack);
+            last_log_idx_in_next_old_batch = install_snap(snap);
+            commit_idx = max(commit_idx, last_log_idx_in_next_old_batch);
             was_ae_accepted = true;
             set_new_deadline();
         }
@@ -408,7 +439,7 @@ void onSnap(int leader_id, xnt term, const string &snap) {
         term_when_SNAP = curTerm;
     }
 
-    Psend(leader_id, build_AEres(term_when_SNAP, ack, was_ae_accepted));
+    Psend(leader_id, build_AEres(term_when_SNAP, last_log_idx_in_next_old_batch, was_ae_accepted));
 }
 
 void onVReq(int c_ID, xnt c_Term, xnt c_LogIDX, xnt c_LogTERM) {
@@ -484,7 +515,9 @@ void onVRes(int c_ID, xnt c_Term, bool was_vote_granted) {
         xnt log_len = get_log_idx();
         sent_len.assign(NUM_NODES, log_len);
         ack_len.assign(NUM_NODES, 0);
-        ack_len[myNodeID] = log_len;
+
+        // no-op lets me commit old term entries even if clients stop writing
+        ack_len[myNodeID] = append_entry(NO_OP, NO_OP, curTerm);
 
         for (int node = 0; node < NUM_NODES; node++) {
             if (node == myNodeID) continue;

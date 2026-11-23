@@ -43,6 +43,7 @@ bool handle_aeres(int x);
 bool handle_snap(int x);
 string db_state();
 xnt get_commit_idx();
+bool am_i_caught_up();
 void ensure_wal_is_open();
 void remove_temp_snap();
 void take_pics();
@@ -202,6 +203,7 @@ static bool done_processing() {
         lock_guard g(outbox_mutex[peer]);
         if (!outbox[peer].empty()) return false;
     }
+    if (!am_i_caught_up()) return false;
     xnt commit_idx = get_commit_idx();
     return get_applied_idx() == commit_idx && get_log_idx() == commit_idx;
 }

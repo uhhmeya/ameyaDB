@@ -65,6 +65,7 @@ void apply_entries(xnt commit_idx) {
 
     for (; applied_idx < commit_idx; applied_idx++) {
         const entry& e = log_vector[applied_idx - snap_index];
+        if (e.wr.k == NO_OP) continue;
         db[e.wr.k] = e.wr.v;
         dk.insert(e.wr.k);
     }
@@ -181,6 +182,9 @@ void take_pics() {
             continue;
         }
 
+        // cutting entries a follower still needs makes it need a new snap after every snap
+        xnt oldest_idx_a_follower_needs = get_oldest_idx_a_follower_needs();
+
         unique_lock s(snap_mutex);
         str_arr_1D empty;
         str_arr_2D wip_snap_arr = prev_snap_arr;
@@ -206,7 +210,15 @@ void take_pics() {
         f.flush(); f.close();
         rename((SNAP_DIR_PATH + "snap" + ".tmp").c_str(), (SNAP_DIR_PATH + "snap").c_str());
 
-        truncate_wal(snap_idx, last_term);
+        xnt cut_idx = min(snap_idx, oldest_idx_a_follower_needs);
+        xnt cut_term;
+        bool can_cut;
+        {
+            lock_guard l(log_mutex);
+            can_cut = cut_idx > snap_index;
+            cut_term = term_at(cut_idx);
+        }
+        if (can_cut) truncate_wal(cut_idx, cut_term);
         prev_snap_arr = std::move(new_snap_arr);
         prev_snap_idx = snap_idx;
         s.unlock();
@@ -330,18 +342,19 @@ bool get_suffix(xnt &last_log_idx_in_old_batch, xnt &last_log_term_in_old_batch,
     lock_guard lock(log_mutex);
 
     bool suffix_starts_in_snap = last_log_idx_in_old_batch < snap_index;
+
+    // snap has now engulfed start of suffix
     if (suffix_starts_in_snap) {
         last_log_idx_in_old_batch  = snap_index;
         last_log_term_in_old_batch = snap_term;
         return false;
     }
 
+    // all of suffix is in the log vector
     last_log_term_in_old_batch = term_at(last_log_idx_in_old_batch);
-
     xnt first_pos = last_log_idx_in_old_batch - snap_index;
     for (xnt pos = first_pos; pos < log_vector.size() && suffix.size() < 1000; pos++)
         suffix.push_back(log_vector[pos]);
-
     return true;
 }
 
