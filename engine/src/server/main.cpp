@@ -58,6 +58,10 @@ static const string RELAY_IP = "10.0.100.70";
 constexpr int RELAY_PORT = 9000;
 constexpr int CLIENT_PORT = 7000;
 
+// bump to start every node with an empty wal, snap and term on its next boot
+constexpr int DATA_EPOCH = 1;
+static const string DATA_DIR = "../output";
+
 static const char *ALLOW_SCRIPT = "/usr/local/bin/ameyaDB-allow.sh";
 static const char *CRASH_SCRIPT = "/usr/local/bin/ameyaDB-crash.sh";
 
@@ -417,6 +421,28 @@ static void accept_clients_4ever(int listener) {
     }
 }
 
+// data
+static void wipe_data_if_new_epoch() {
+    const string epoch_path = DATA_DIR + "/epoch";
+
+    int saved_epoch = -1;
+    ifstream saved(epoch_path);
+    saved >> saved_epoch;
+    if (saved_epoch == DATA_EPOCH) return;
+
+    // raft can't merge logs that already split, so every node starts empty
+    remove_all(DATA_DIR + "/snaps");
+    remove(DATA_DIR + "/wal.txt");
+    remove(DATA_DIR + "/wal.txt.tmp");
+    remove(DATA_DIR + "/raft.txt");
+    remove(DATA_DIR + "/raft.tmp");
+
+    create_directories(DATA_DIR);
+    ofstream new_epoch(epoch_path);
+    new_epoch << DATA_EPOCH << "\n";
+    print("wiped data for epoch " + to_string(DATA_EPOCH));
+}
+
 // (k v) (fn ln tlr) (i t CRC)
 int main(int argc, char *argv[]) {
 
@@ -447,6 +473,7 @@ int main(int argc, char *argv[]) {
 
     signal(SIGPIPE, SIG_IGN);
 
+    wipe_data_if_new_epoch();
     ensure_wal_is_open();
     remove_temp_snap();
     auto [snap_idx, last_term] = load_snap();
