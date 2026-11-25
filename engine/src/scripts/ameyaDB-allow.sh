@@ -26,10 +26,15 @@ NUM_NODES=5
 iptables -N $RULE_LIST 2>/dev/null || true
 iptables -C INPUT  -j $RULE_LIST 2>/dev/null || iptables -I INPUT  -j $RULE_LIST
 iptables -C OUTPUT -j $RULE_LIST 2>/dev/null || iptables -I OUTPUT -j $RULE_LIST
-iptables -F $RULE_LIST
 
-# skip all nodes that relay gave permission to connect to
-[ "$ALLOWED" = all ] && exit 0
+# everyone is allowed
+if [ "$ALLOWED" = all ]; then
+  iptables -F $RULE_LIST
+  exit 0
+fi
+
+# work out every rule first, the firewall is not touched yet
+RULES=""
 for i in $(seq 0 $((NUM_NODES - 1))); do
   [ "$i" = "$ME" ] && continue
   if [ "$ALLOWED" != none ] && printf '%s' "$ALLOWED" | grep -q "$i"; then
@@ -44,10 +49,14 @@ for i in $(seq 0 $((NUM_NODES - 1))); do
   fi
 
   # don't allow connections denied nodes
-  iptables -A $RULE_LIST -s "$ip" -p tcp --sport $MESH -j DROP
-  iptables -A $RULE_LIST -s "$ip" -p tcp --dport $MESH -j DROP
-  iptables -A $RULE_LIST -d "$ip" -p tcp --sport $MESH -j DROP
-  iptables -A $RULE_LIST -d "$ip" -p tcp --dport $MESH -j DROP
+  RULES+="-A $RULE_LIST -s $ip -p tcp --sport $MESH -j DROP"$'\n'
+  RULES+="-A $RULE_LIST -s $ip -p tcp --dport $MESH -j DROP"$'\n'
+  RULES+="-A $RULE_LIST -d $ip -p tcp --sport $MESH -j DROP"$'\n'
+  RULES+="-A $RULE_LIST -d $ip -p tcp --dport $MESH -j DROP"$'\n'
 done
+
+# swap the whole rule list in one shot. every cut lands at the same instant, and going
+# from one partition to another never opens a gap where everyone is allowed
+printf '*filter\n:%s - [0:0]\n%sCOMMIT\n' "$RULE_LIST" "$RULES" | iptables-restore --noflush
 
 exit 0

@@ -28,6 +28,7 @@ static vector<entry> log_vector;
 static xnt snap_index = 0;
 static xnt snap_term  = 0;
 static xnt applied_idx = 0;
+static unsigned long long apply_hash = 0;
 
 // turns entry into string
 static string serialize_entry(const entry& e) {
@@ -65,6 +66,12 @@ void apply_entries(xnt commit_idx) {
 
     for (; applied_idx < commit_idx; applied_idx++) {
         const entry& e = log_vector[applied_idx - snap_index];
+
+        // every node that applied the same entries in the same order has the same hash
+        apply_hash = (apply_hash ^ e.checksum) * 1099511628211ULL;
+        if (e.log_index % 500 == 0)
+            note("hash", to_string(e.log_index) + " " + to_string(apply_hash));
+
         if (e.wr.k == NO_OP) continue;
         db[e.wr.k] = e.wr.v;
         dk.insert(e.wr.k);
@@ -90,6 +97,7 @@ xnt append_entry(const string& k, const string& v, xnt term) {
 
         wal << serialize_entry(e);
         wal.flush();
+        disk_stall();
         log_vector.push_back(e);
     }
 
@@ -111,6 +119,7 @@ void append_entries(const vector<entry>& suffix) {
         log_vector.push_back(e);
     }
     wal.flush();
+    if (!suffix.empty()) disk_stall();
 
     log_index = snap_index + log_vector.size();
 }
@@ -189,6 +198,7 @@ void take_pics() {
         str_arr_1D empty;
         str_arr_2D wip_snap_arr = prev_snap_arr;
         xnt snap_idx, last_term;
+        unsigned long long snap_hash;
         {
             shared_lock lock(db_mutex);
             swap(empty, dk);
@@ -197,16 +207,16 @@ void take_pics() {
                 lock_guard l(log_mutex);
                 snap_idx  = applied_idx;
                 last_term = term_at(applied_idx);
+                snap_hash = apply_hash;
             }
             for (auto& k : local_dk)
                 wip_snap_arr[k] = db.contains(k) ? db.at(k) : "";
         }
-        str_arr_2D new_snap_arr = wip_snap_arr;
 
         // snap.tmp --> snap.txt
         ofstream f(SNAP_DIR_PATH + "snap" + ".tmp");
-        f << snap_idx << " " << last_term << "\n";
-        for (auto& [k, v] : new_snap_arr) f << k << " " << v << "\n";
+        f << snap_idx << " " << last_term << " " << snap_hash << "\n";
+        for (auto& [k, v] : wip_snap_arr) f << k << " " << v << "\n";
         f.flush(); f.close();
         rename((SNAP_DIR_PATH + "snap" + ".tmp").c_str(), (SNAP_DIR_PATH + "snap").c_str());
 
@@ -219,7 +229,7 @@ void take_pics() {
             cut_term = term_at(cut_idx);
         }
         if (can_cut) truncate_wal(cut_idx, cut_term);
-        prev_snap_arr = std::move(new_snap_arr);
+        prev_snap_arr = std::move(wip_snap_arr);
         prev_snap_idx = snap_idx;
         s.unlock();
 
@@ -239,7 +249,7 @@ pair<xnt, xnt> load_snap() {
     getline(f, line);
     istringstream hdr(line);
     xnt snap_idx = 0, last_term = 0;
-    hdr >> snap_idx >> last_term;
+    hdr >> snap_idx >> last_term >> apply_hash;
     snap_index = snap_idx;
     snap_term  = last_term;
     applied_idx = snap_idx;
@@ -381,7 +391,8 @@ xnt install_snap(const string& snap) {
     getline(f, line);
     istringstream hdr(line);
     xnt snap_idx = 0, last_term = 0;
-    hdr >> snap_idx >> last_term;
+    unsigned long long snap_hash = 0;
+    hdr >> snap_idx >> last_term >> snap_hash;
 
     if (snap_idx <= applied_idx) return applied_idx;
 
@@ -411,6 +422,7 @@ xnt install_snap(const string& snap) {
     prev_snap_arr = std::move(snap_arr);
     dk.clear();
     applied_idx = snap_idx;
+    apply_hash = snap_hash;
     log_index = snap_index + log_vector.size();
 
     return snap_idx;
@@ -433,7 +445,23 @@ string db_state() {
         digest += compute_checksum(e);
     }
 
-    return to_string(applied_idx) + " " + to_string(last_term) + " " + to_string(db.size()) + " " + to_string(digest);
+    xnt log_len;
+    {
+        lock_guard l(log_mutex);
+        log_len = snap_index + log_vector.size();
+    }
+
+    // applied idx, its term, key count, db digest, apply hash, log idx
+    return to_string(applied_idx) + " " + to_string(last_term) + " " + to_string(db.size()) + " " + to_string(digest)
+         + " " + to_string(apply_hash) + " " + to_string(log_len);
+}
+
+// applied idx, log idx, snap idx, apply hash
+string log_stat() {
+    shared_lock lock(db_mutex);
+    lock_guard l(log_mutex);
+    return to_string(applied_idx) + " " + to_string(snap_index + log_vector.size()) + " " + to_string(snap_index)
+         + " " + to_string(apply_hash);
 }
 
 

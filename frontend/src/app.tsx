@@ -3,24 +3,18 @@ import { useRelay } from './hooks/useRelay.tsx'
 import Landing from './pages/landing.tsx'
 import Run from './pages/run.tsx'
 import Debug from './pages/debug.tsx'
+import Compare from './pages/compare.tsx'
 
 function App() {
-    const { connected, log, sendMsg } = useRelay()
-
-    // every update carries the whole cluster status, so the newest one is current
-    const latest = log.at(-1)
+    const { connected, status, catalog, recording, events, history, sweep, sendMsg, openSavedRun } = useRelay()
 
     return (
         <BrowserRouter>
             <Routes>
-                <Route path="/" element={<Landing connected={connected} />} />
-                <Route path="/run" element={
-                    <Run connected={connected}
-                         sendMsg={sendMsg}
-                         bornDeadOrParticipating={latest?.born_dead_or_participating ?? 0}
-                         compileFailed={latest?.compile_failed ?? false} />
-                } />
-                <Route path="/debug" element={<Debug log={log} />} />
+                <Route path="/" element={<Landing connected={connected} openSavedRun={openSavedRun} />} />
+                <Route path="/run" element={<Run connected={connected} sendMsg={sendMsg} status={status} catalog={catalog} />} />
+                <Route path="/debug" element={<Debug recording={recording} events={events} status={status} sweep={sweep} sendMsg={sendMsg} />} />
+                <Route path="/compare" element={<Compare history={history} sweep={sweep} catalog={catalog} />} />
             </Routes>
         </BrowserRouter>
     )

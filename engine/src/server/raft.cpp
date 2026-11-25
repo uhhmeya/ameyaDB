@@ -43,6 +43,14 @@ static vector<steady_clock::time_point> snap_sent;
 
 static atomic<steady_clock::time_point> deadline{};
 
+// research switches, testy sets these for every run
+static bool prevote_on() { return get_flag("prevote", 0) == 1; }
+static bool checkquorum_on() { return get_flag("checkquorum", 0) == 1; }
+
+// timers in ms. a sweep can turn these, nothing else changes them
+static int election_ms() { return get_flag("election_ms", 150); }
+static int heartbeat_ms() { return get_flag("heartbeat_ms", 50); }
+
 static void must(bool ok, const string &what)
 {
     if (!ok) {
@@ -197,7 +205,7 @@ static void save_tv() {
 }
 
 static void set_new_deadline() {
-    deadline = steady_clock::now() + milliseconds(rand_sleep_timer_ms(150, 300));
+    deadline = steady_clock::now() + milliseconds(rand_sleep_timer_ms(election_ms(), 2 * election_ms()));
 }
 
 static void replicate(int follower) {
@@ -209,11 +217,10 @@ static void replicate(int follower) {
     bool snap_sent_recently = steady_clock::now() - snap_sent[follower] <= seconds(10);
     bool is_connected = my_fd_to[follower].load() >= 0;
 
-    // installs take seconds, resending sooner makes followers install snaps back to back
+    // if snap was not sent to this node in the last 10 seconds
     if (suffix_starts_in_snap && !snap_sent_recently && is_connected) {
         snap_sent[follower] = steady_clock::now();
-
-        // read snap off ROCK, a big snap read freezes heartbeats and starts elections
+        note("snap_sent", to_string(follower));
         xnt term_when_SNAP = curTerm;
         thread([follower, term_when_SNAP] {
             Psend(follower, build_SNAP(term_when_SNAP, read_snap()));
@@ -250,7 +257,7 @@ static void startELEC() {
         set_new_deadline();
         if (role == LEADER) return;
 
-        // TODO : PREVOTE!!!
+        // TODO : PREVOTE!!! (only when prevote_on()). note("prevote", term) puts every round on the dashboard
         curTerm++;
         role = CANDIDATE;
         votedFor = myNodeID;
@@ -259,6 +266,7 @@ static void startELEC() {
         leader = NO_LEADER;
 
         save_tv();
+        note("elec", to_string(curTerm));
 
         term_when_ELEC_started = curTerm;
         get_log_idx_and_last_log_term(log_index, term_of_last_log_entry);
@@ -278,15 +286,27 @@ static void Ethread() {
 
 static void HBthread() {
     while (true) {
-        sleep_for(milliseconds(50));
+        sleep_for(milliseconds(heartbeat_ms()));
 
         lock_guard g(ROCK);
         if (role != LEADER) continue;
 
+        // TODO : CHECKQUORUM!!! (only when checkquorum_on())
         for (int node = 0; node < NUM_NODES; node++) {
             if (node == myNodeID) continue;
             replicate(node);
         }
+    }
+}
+
+// dashboard reads one of these from every node 4 times a second
+static void STATthread() {
+    while (true) {
+        sleep_for(milliseconds(250));
+
+        lock_guard g(ROCK);
+        note("stat", to_string(curTerm) + " " + to_string(role) + " " + to_string(leader) + " "
+                   + to_string(commit_idx) + " " + log_stat() + " " + net_stat() + " " + to_string(get_notes_lost()));
     }
 }
 
@@ -313,6 +333,7 @@ void raft_init() {
     set_new_deadline();
     thread(Ethread).detach();
     thread(HBthread).detach();
+    thread(STATthread).detach();
 }
 
 bool onWrite(const string &k, const string &v) {
@@ -431,6 +452,7 @@ void onSnap(int leader_id, xnt term, const string &snap) {
             role = FOLLOWER;
             leader = leader_id;
             last_log_idx_in_next_old_batch = install_snap(snap);
+            note("snap_installed", to_string(last_log_idx_in_next_old_batch));
             commit_idx = max(commit_idx, last_log_idx_in_next_old_batch);
             was_ae_accepted = true;
             set_new_deadline();
@@ -476,6 +498,7 @@ void onVReq(int c_ID, xnt c_Term, xnt c_LogIDX, xnt c_LogTERM) {
             votedFor = c_ID;
             save_tv();
             set_new_deadline();
+            note("vote", to_string(curTerm) + " " + to_string(c_ID));
         }
 
         term_when_VR = curTerm;
@@ -511,12 +534,12 @@ void onVRes(int c_ID, xnt c_Term, bool was_vote_granted) {
     if (in_votes.size() >= NUM_NODES / 2 + 1) {
         role = LEADER;
         leader = myNodeID;
+        note("leader", to_string(curTerm));
 
         xnt log_len = get_log_idx();
         sent_len.assign(NUM_NODES, log_len);
         ack_len.assign(NUM_NODES, 0);
 
-        // no-op lets me commit old term entries even if clients stop writing
         ack_len[myNodeID] = append_entry(NO_OP, NO_OP, curTerm);
 
         for (int node = 0; node < NUM_NODES; node++) {

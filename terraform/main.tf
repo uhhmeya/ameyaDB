@@ -318,7 +318,7 @@ done
 test -d /home/ec2-user/ameyaDB/.git
 mkdir -p /home/ec2-user/ameyaDB/engine/src/output/EXEC
 cd /home/ec2-user/ameyaDB/engine/src/server
-g++ -std=c++20 -pthread -o /home/ec2-user/ameyaDB/engine/src/output/EXEC/server main.cpp handlers.cpp walsnap.cpp threads.cpp raft.cpp -lclockbound || {
+g++ -std=c++20 -O2 -pthread -o /home/ec2-user/ameyaDB/engine/src/output/EXEC/server main.cpp handlers.cpp walsnap.cpp threads.cpp raft.cpp -lclockbound || {
   echo '{"node":${count.index},"type":"compile","msg":"failed"}' > /dev/tcp/10.0.100.70/9001
   exit 1
 }

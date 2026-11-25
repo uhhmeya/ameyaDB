@@ -117,3 +117,7 @@ xnt get_applied_idx();
 xnt get_oldest_idx_a_follower_needs();
 string read_snap();
 xnt install_snap(const string& snap);
+string log_stat();
+string net_stat();
+int get_flag(const string& name, int fallback);
+void disk_stall();

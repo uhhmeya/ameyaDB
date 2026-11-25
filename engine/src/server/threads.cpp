@@ -8,6 +8,8 @@
 #include <iomanip>
 #include <iostream>
 #include <mutex>
+#include <condition_variable>
+#include <deque>
 #include <sstream>
 #include <unistd.h>
 #include <sys/timex.h>
@@ -23,6 +25,12 @@ static mutex print_mutex;
 static mutex relay_mutex;
 
 static atomic<unsigned long long> msgs_sent_to_browser_count{0};
+
+// notes wait here so raft never blocks on the relay wire
+static mutex notes_mutex;
+static condition_variable notes_cv;
+static deque<string> notes;
+static atomic<unsigned long long> notes_lost{0};
 static long long life_count = 0;
 
 // reference to connection with CB
@@ -167,10 +175,7 @@ static string json_escape(const string &s) {
 
 
 // {"node":1,"life":3,"seq":42,"wall_us":172495512345,"err_us":12,"type":"wire","msg":"1 3 up"}
-void send_to_relay(const std::string &type, const std::string &msg) {
-
-    const int fd = relay_fd.load();
-    if (fd < 0) return;
+static string relay_line(const std::string &type, const std::string &msg) {
 
     const unsigned long long seq = msgs_sent_to_browser_count.fetch_add(1, memory_order_relaxed);
 
@@ -187,9 +192,52 @@ void send_to_relay(const std::string &type, const std::string &msg) {
          << "\"type\":\""  << type             << "\","
          << "\"msg\":\""   << json_escape(msg) << '"'
          << "}\n";
-    const string out = line.str();
+    return line.str();
+}
+
+static bool write_to_relay(const string &out) {
+    const int fd = relay_fd.load();
+    if (fd < 0) return false;
 
     lock_guard lock(relay_mutex);
     ssize_t w = write(fd, out.c_str(), out.size());
-    (void) w;
+    return w == static_cast<ssize_t>(out.size());
+}
+
+void send_to_relay(const std::string &type, const std::string &msg) {
+    write_to_relay(relay_line(type, msg));
+}
+
+// same as send_to_relay but never waits on the wire, safe to call while holding ROCK
+void note(const std::string &type, const std::string &msg) {
+    string line = relay_line(type, msg);
+    {
+        lock_guard g(notes_mutex);
+        if (notes.size() >= 20000) {
+            notes_lost++;
+            return;
+        }
+        notes.push_back(std::move(line));
+    }
+    notes_cv.notify_one();
+}
+
+void drain_notes_4ever() {
+    while (true) {
+        string batch;
+        size_t count = 0;
+        {
+            unique_lock g(notes_mutex);
+            notes_cv.wait(g, [] { return !notes.empty(); });
+            for (; !notes.empty(); count++) {
+                batch += notes.front();
+                notes.pop_front();
+            }
+        }
+        if (!write_to_relay(batch)) notes_lost += count;
+    }
+}
+
+unsigned long long get_notes_lost() {
+    return notes_lost.load();
 }

@@ -32,5 +32,9 @@ __pycache__/
 engine/src/output
 engine/debug
 
+# what test.py + relay.py leave behind on the bastion
+runs/
+relay_epoch
+
 
 

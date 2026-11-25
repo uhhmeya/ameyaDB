@@ -25,6 +25,41 @@ This caused a bug where a quick reconnect caused a node to falsely report a deat
 so that it blocks the FIN packets sent to its peers but not the relay. This lets the relay know which nodes are dead or alive
 without the clumsy report system!
 
+# Chaos testing
+test.py breaks the cluster on purpose and judges what happens. The run page picks what to break.
+1. random chaos : crashes, cut links, slow links, lost msgs, one way links, slow disks & frozen processes at random moments, on top of each other. The seed comes from the OS so no two runs are alike, and it is shown so a run can be replayed.
+2. handmade edge case : one of 24 situations that random chaos almost never lands on (`SCENARIOS` in chaos.py)
+3. sweep : the same test many times with one knob turned further each run (`SWEEPS` in chaos.py)
+
+After every run testy checks that there was one leader per term, one vote per term, no term went back, every node applied the same entries in the same order, every acked write survived & all 5 nodes agree.
+If a check fails, the database is cleared on all 5 nodes before the next run. The relay owns the data epoch now, so there is no constant to bump.
+
+| file | what it is |
+| --- | --- |
+| test.py | runs one test: clients, phases, numbers, verdict |
+| chaos.py | every fault, every handmade edge case, every sweep |
+| checks.py | what testy knows about the cluster & how it judges a run |
+| selftest.py | tests for chaos.py + checks.py, no cluster needed: `python3 selftest.py` |
+| relay.py | passes msgs between browser, testy & nodes, owns the data epoch |
+
+# Research switches
+The run page has two tick boxes, prevote & checkquorum, and a box for more flags. Every node gets them as flags.
+They change nothing yet. The code that reads them is the part left to write:
+1. `// TODO : PREVOTE!!!` in `startELEC()` in raft.cpp, behind `prevote_on()`
+2. `// TODO : CHECKQUORUM!!!` in `HBthread()` in raft.cpp, behind `checkquorum_on()`
+3. `get_flag("name", fallback)` reads any other flag, `election_ms()` & `heartbeat_ms()` are the timers
+
+The question, the hypotheses & the experiments are in the research brief: https://claude.ai/artifact/ToDGC2ezmaYV5ZqjsWeMwq
+
+# Getting new code onto the cluster
+1. git commit + git push. The bastion git pulls & every node clones on boot, so nothing new runs until it is pushed
+2. `./dooby.sh --fresh` once after pulling this change (the -O2 build flag lives in each node's boot script)
+3. `./dooby.sh` after that
+
+# Looking at a saved run without the cluster
+1. `cd frontend && npm run dev`
+2. open http://localhost:5173 & pick the file you downloaded from the live page
+
 # usage
 1. download project & cd to it
 2. ameyaDB % chmod +x dooby.sh && ./dooby.sh

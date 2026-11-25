@@ -25,6 +25,10 @@ SERVICE=ameyaDB
 # these two and the FINs leave before the filter exists.
 "$ALLOW" "$ME" none
 
+# tell the relay the instant this node went dark, failure detection is timed from here.
+# 9001 is not a mesh port so the filter lets it out. never let this hold up the kill
+timeout 1 bash -c "echo '{\"node\":$ME,\"type\":\"cut\",\"wall_us\":$(date +%s%6N)}' > /dev/tcp/10.0.100.70/9001" 2>/dev/null || true
+
 # `systemctl stop`, not `kill`. the unit is Restart=always, so a plain kill is
 # undone by systemd in RestartSec=1 and the node is back before the test can
 # observe anything. an explicit stop is the one thing Restart=always does not
