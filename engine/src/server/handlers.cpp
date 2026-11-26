@@ -12,7 +12,8 @@ int  who_is_leader();
 bool onWrite(const string& k, const string& v);
 void onVReq(int c_ID, xnt c_Term, xnt c_LogIDX, xnt c_LogTERM);
 void onVRes(int c_ID, xnt c_Term, bool was_vote_granted);
-void onAE(int leader_id, xnt term, xnt last_log_idx_in_old_batch, xnt last_log_term_in_old_batch, xnt leader_commit, const vector<entry>& suffix);
+void onAE(int leader_id, xnt term, xnt last_log_idx_in_old_batch, xnt last_log_term_in_old_batch, xnt leader_commit,
+    const vector<entry>& suffix);
 void onAERes(int f_ID, xnt f_Term, xnt last_log_idx_in_next_old_batch, bool was_ae_accepted);
 void onSnap(int leader_id, xnt term, const string& snap);
 
@@ -95,12 +96,15 @@ bool handle_write(int client_fd) {
         return reply(client_fd, I_AM_NOT_LEADER, leader_id);
     }
 
+    // Node received AE with higher term OR write didn't reach quorum
     auto [k, v] = *kv;
     if (!onWrite(k, v))
         return reply(client_fd, IDK, -1);
 
+    // ack
     return reply(client_fd, I_AM_LEADER, myNodeID);
 }
+
 bool handle_read(int client_fd) {
     auto k = read_k(client_fd);
     if (!k) return false;

@@ -132,8 +132,6 @@ def encode_read(key):
 def guess(node_id):
     return f"node-{node_id}.ameyadb.internal"
 
-# every value is a number this client only ever uses once, so after the run
-# testy can tell exactly which write a key ended up holding
 async def run_client(client_num, rng, keys, think_sec):
 
     guess_node = rng.randrange(NUM_NODES)
@@ -207,7 +205,6 @@ async def run_scout(node_id):
 
                 wr_num += 1
                 key = f"s{node_id}k{wr_num % 20}"
-                began = time.time()
                 writer.write(encode_write(key, str(wr_num)))
 
                 try:
@@ -319,7 +316,7 @@ async def wait_for_service(healed_at):
         await asyncio.sleep(0.1)
         now = checks.now()
         first = bisect.bisect_left(checks.acks, healed_at)
-        gaps = checks.find_outages(checks.acks[first:], healed_at, now, checks.OUTAGE_MIN_SEC)
+        gaps = checks.find_outage(checks.acks[first:], healed_at, now, checks.OUTAGE_MIN_SEC)
         back_at = gaps[-1][1] if gaps else healed_at
         if len(checks.acks) > first and now - back_at >= 1.0:
             return round(back_at - healed_at, 3)
