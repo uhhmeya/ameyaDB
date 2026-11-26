@@ -1,8 +1,3 @@
-# chaos.py : every way testy knows how to hurt the cluster
-#
-# two kinds of hurt:
-#   firewall   crash + cut links with the iptables scripts. real tcp wires die and reconnect
-#   in node    slow / lossy / one way links, slow disk, frozen process. the node does it to itself
 import asyncio
 import math
 import time
@@ -10,17 +5,17 @@ import time
 import checks
 from checks import NUM_NODES, ALL_LINKS
 
-send_to_node = None # test.py plugs its sender in here
-flags = ""          # research switches every node gets when it wakes up
-hard = True         # True: cuts go through the firewall. False: nodes drop the msgs themselves
+send_to_node = None
+flags = ""
+hard = True
 
-cuts = {}           # fault id -> links that are cut
-gray = {}           # fault id -> {(sender, receiver): (delay_ms, jitter_ms, drop_pct)}
-disks = {}          # fault id -> {node: stall_ms}
-told = {}           # node -> what it was last told, so nothing gets sent twice
-busy_until = {}     # node -> when its crash or freeze ends
-faults = []         # every fault of this run, for the timeline + metrics
-changed = set()     # fault ids the browser has not seen the newest version of
+cuts = {}
+gray = {}
+disks = {}
+told = {}
+busy_until = {}
+faults = []
+changed = set()
 
 
 def begin_run(new_flags, new_hard):
@@ -32,29 +27,22 @@ def begin_run(new_flags, new_hard):
     changed.clear()
 
 
-# ---------------------------------------------------------------- shapes a network can be cut into
-
 def link(a, b):
     return frozenset((a, b))
 
-# one node cut off from everyone
 def island(node):
     return {l for l in ALL_LINKS if node in l}
 
-# everyone only reaches the hub
 def star(hub):
     return {l for l in ALL_LINKS if hub not in l}
 
-# every node only reaches its neighbours in this order
 def line(order):
     kept = {link(a, b) for a, b in zip(order, order[1:])}
     return set(ALL_LINKS) - kept
 
-# two sides that can't reach each other
 def split(side_a, side_b):
     return {link(a, b) for a in side_a for b in side_b}
 
-# every link down with probability p
 def lottery(rng, p):
     return {l for l in ALL_LINKS if rng.random() < p}
 
@@ -62,10 +50,7 @@ def both_ways(a, b, knobs):
     return {(a, b): knobs, (b, a): knobs}
 
 
-# ---------------------------------------------------------------- telling the nodes
-
 def wanted(node, cuts, gray, disks, hard):
-    """what one node has to be told so that every active fault holds: (allowed peers, link knobs, disk stall)"""
     blocked, links = set(), {}
 
     for cut in cuts.values():
@@ -107,16 +92,11 @@ async def tell_everyone():
     for node in range(NUM_NODES):
         await tell(node)
 
-# a node that just came back knows nothing: no flags, firewall wide open, no gray faults
 async def wake(node):
     await send_to_node(node, "flags " + flags)
     await tell(node, again=True)
 
 
-# ---------------------------------------------------------------- starting + stopping faults
-
-# deadly: the nodes listed can no longer lead. if the leader is one of them,
-# the run times how long the cluster took to notice and to replace it
 def record(label, kind, nodes, deadly=False):
     leader = checks.leader_now()
     fault = {"id": len(faults), "label": label, "kind": kind, "nodes": list(nodes),
@@ -149,7 +129,6 @@ async def hold(seconds, label, kind, nodes=(), cut=None, slow=None, stall=None, 
 def is_busy(node):
     return not checks.up[node] or busy_until.get(node, 0) > time.time()
 
-# firewall goes up, process dies, comes back after `seconds`
 async def crash(node, seconds):
     if is_busy(node): return None
     fault = record("crash node%d for %.1fs" % (node, seconds), "crash", [node], deadly=True)
@@ -159,7 +138,6 @@ async def crash(node, seconds):
     await send_to_node(node, "terminate %.2f" % seconds)
     return fault
 
-# process frozen solid, sockets stay open, peers get no FIN and no heartbeats
 async def pause(node, ms):
     if is_busy(node): return None
     fault = record("freeze node%d for %dms" % (node, ms), "pause", [node], deadly=ms >= 500)
@@ -168,7 +146,6 @@ async def pause(node, ms):
     await send_to_node(node, "pause %d" % ms)
     return fault
 
-# process only runs run_ms out of every stop_ms + run_ms. alive, just slow
 async def limp(node, stop_ms, run_ms, seconds):
     if is_busy(node): return None
     fault = record("node%d limps: frozen %dms of every %dms" % (node, stop_ms, stop_ms + run_ms), "limp", [node])
@@ -191,8 +168,6 @@ def take_changed():
     return news
 
 
-# ---------------------------------------------------------------- what the dashboard + the oracle see
-
 def dead_links():
     dead = set()
     for cut in cuts.values():
@@ -202,13 +177,11 @@ def dead_links():
             if drop >= 100: dead.add(link(sender, receiver))
     return dead
 
-# could an ideal protocol have a leader right now?
 def viable_now():
     alive = {node for node in range(NUM_NODES) if checks.up[node] and busy_until.get(node, 0) < time.time()}
     return checks.viable(alive, set(ALL_LINKS) - dead_links())
 
 def link_codes():
-    """25 chars, row = sender, column = receiver. 0 fine, 1 firewall cut, 2 every msg dropped, 3 lossy, 4 slow"""
     all_cuts = set()
     for cut in cuts.values():
         all_cuts |= cut
@@ -230,8 +203,6 @@ def link_codes():
     return codes
 
 
-# ---------------------------------------------------------------- picking victims
-
 async def wait_for_leader(timeout=15):
     give_up = time.time() + timeout
     while time.time() < give_up:
@@ -240,7 +211,6 @@ async def wait_for_leader(timeout=15):
         await asyncio.sleep(0.05)
     return 0
 
-# faults that hit the leader are the interesting ones, so the dice are loaded
 def victim(rng, leader_bias=0.5):
     leader = checks.leader_now()
     if leader is not None and rng.random() < leader_bias: return leader
@@ -257,9 +227,6 @@ def log_uniform(rng, lo, hi):
 def how_long(rng, cap, lo=0.3, hi=15):
     return max(0.2, min(cap, log_uniform(rng, lo, hi)))
 
-
-# ---------------------------------------------------------------- random chaos
-# faults start at random moments, last a random time and overlap. nothing here is scripted
 
 async def rand_crash(rng, cap):
     seconds = how_long(rng, cap, 0.3, 12)
@@ -330,7 +297,6 @@ async def rand_disk(rng, cap):
     node, stall = victim(rng), int(log_uniform(rng, 5, 300))
     await hold(how_long(rng, cap), "node%d's disk takes %dms per write" % (node, stall), "gray", [node], stall={node: stall})
 
-# (fault, how often it gets picked)
 MENU = [
     (rand_crash, 3), (rand_majority_crash, 0.5), (rand_island, 2), (rand_split, 2), (rand_links, 2),
     (rand_shape, 1), (rand_flap, 1.5), (rand_pause, 2), (rand_limp, 1), (rand_slow, 2),
@@ -348,10 +314,6 @@ async def random_chaos(rng, seconds, gap):
         running.append(asyncio.create_task(fault(rng, left)))
     await asyncio.gather(*running)
 
-
-# ---------------------------------------------------------------- handmade edge cases
-# each one builds a situation that random chaos almost never lands on.
-# L is whoever leads at that moment, so every run hits the same situation no matter who won
 
 async def leader_crashes(rng, seconds):
     give_up = time.time() + seconds
@@ -427,11 +389,9 @@ async def constrained_election(rng, seconds):
     L = await wait_for_leader()
     hub, a, b, c = others(rng, L)
 
-    # the hub stays a follower but its log trails everyone else's
     lag = await start("node%d falls behind: the leader's msgs reach it 100ms late" % hub, "gray", [hub], slow={(L, hub): (100, 0, 0)})
     await asyncio.sleep(3)
 
-    # now the only node that reaches a majority is the one with the oldest log
     cut = island(L) | split([a], [b, c]) | split([b], [c])
     stuck = await start("leader node%d is gone, node%d reaches everyone but has the oldest log" % (L, hub), "partition", [L], cut=cut, deadly=True)
     await stop(lag)
@@ -505,7 +465,6 @@ async def lossy_mesh(rng, seconds):
     slow = {(a, b): (0, 0, 20) for a in range(NUM_NODES) for b in range(NUM_NODES) if a != b}
     await hold(seconds, "every link loses 20% of msgs", "gray", [], slow=slow)
 
-# name -> (what to run, what it is, how many seconds of it)
 SCENARIOS = {
     "leader_crashes":       (leader_crashes, "kill the leader every 8s. clean numbers for failure detection + out of service time", 40),
     "figure8":              (figure8, "kill each new leader moments after it wins, so logs fill with entries nobody committed", 40),
@@ -533,9 +492,6 @@ SCENARIOS = {
     "lossy_mesh":           (lossy_mesh, "gray: every link silently loses 20% of msgs", 30),
 }
 
-
-# ---------------------------------------------------------------- sweeps
-# one knob (x) turned a bit further every run, everything else the same
 
 async def link_lottery(rng, seconds, p):
     fault = await start("every link down with probability %.2f, redrawn every 2s" % p, "partition", [], cut=lottery(rng, p))
@@ -582,9 +538,6 @@ async def napping_follower(rng, seconds, ms):
         if ms: await pause(others(rng, L)[0], int(ms))
         await asyncio.sleep(3)
 
-# the faults are the same for every x, the nodes get x as their election timeout (see KNOBS).
-# a real crash every 8s says how fast a dead leader gets replaced. one link of the leader
-# dropping out for 120ms about once a second says how often a healthy leader gets replaced
 async def crashes_and_blips(rng, seconds, election_ms):
     give_up = time.time() + seconds
     next_crash = time.time() + 8
@@ -601,7 +554,6 @@ async def crashes_and_blips(rng, seconds, election_ms):
         await hold(0.12, "link between leader node%d and node%d blips" % (L, f), "partition", [L, f], cut={link(L, f)})
         await asyncio.sleep(rng.uniform(0.5, 1.5))
 
-# name -> (what to run with each x, what x is, the x values, what it is)
 SWEEPS = {
     "links": (link_lottery, "chance a link is down", [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
               "every one of the 10 links is down with probability x, redrawn every 2s. compared against the best any protocol could do"),
@@ -623,7 +575,6 @@ SWEEPS = {
               "every handmade edge case, one after another. the table a paper would print"),
 }
 
-# sweeps that also turn a switch inside the nodes: name -> the flags every node gets for one x
 KNOBS = {
     "timeout": lambda x: {"election_ms": int(x), "heartbeat_ms": int(x) // 3},
 }

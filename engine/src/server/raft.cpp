@@ -27,11 +27,9 @@ static const string RAFT_TMP_PATH = "../output/raft.tmp";
 static mutex ROCK;
 static condition_variable committed;
 
-// restore
 static xnt curTerm;
 static int votedFor;
 
-// new
 static int leader;
 static Raft_Role role;
 static xnt commit_idx;
@@ -43,11 +41,9 @@ static vector<steady_clock::time_point> snap_sent;
 
 static atomic<steady_clock::time_point> deadline{};
 
-// research switches, testy sets these for every run
 static bool prevote_on() { return get_flag("prevote", 0) == 1; }
 static bool checkquorum_on() { return get_flag("checkquorum", 0) == 1; }
 
-// timers in ms. a sweep can turn these, nothing else changes them
 static int election_ms() { return get_flag("election_ms", 150); }
 static int heartbeat_ms() { return get_flag("heartbeat_ms", 50); }
 
@@ -64,13 +60,10 @@ static string build_Vreq(xnt term, xnt log_idx, xnt last_log_term) {
     buf[0] = VREQ;
     memcpy(&buf[1], &myNodeID, sizeof(myNodeID));
 
-    // term
     memcpy(&buf[1 + sizeof(int)], &term, sizeof(term));
 
-    // log idx
     memcpy(&buf[1 + sizeof(int) + sizeof(xnt)], &log_idx, sizeof(log_idx));
 
-    // last log term in old batch
     memcpy(&buf[1 + sizeof(int) + 2 * sizeof(xnt)], &last_log_term, sizeof(last_log_term));
     return string(buf, sizeof(buf));
 }
@@ -152,13 +145,11 @@ int who_is_leader() {
     return leader;
 }
 
-// follower is only done once it has everything the leader committed
 bool am_i_caught_up() {
     lock_guard g(ROCK);
     return role == LEADER || commit_idx >= leaders_commit_idx;
 }
 
-// leader can't cut entries a connected follower still needs
 xnt get_oldest_idx_a_follower_needs() {
     lock_guard g(ROCK);
 
@@ -183,21 +174,16 @@ static void broadcast(const string &msg) {
 static void save_tv() {
     const string tv = to_string(curTerm) + " " + to_string(votedFor) + "\n";
 
-    // open raft.tmp
     int fd = open(RAFT_TMP_PATH.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
     must(fd >= 0, "open raft.tmp");
 
-    // write tv to raft.tmp
     must(write(fd, tv.data(), tv.size()) == (ssize_t)tv.size(), "write raft.tmp");
 
-    // fsync raft.tmp
     must(fsync(fd) == 0, "fsync raft.tmp");
     close(fd);
 
-    // rename to raft.txt
     must(rename(RAFT_TMP_PATH.c_str(), RAFT_PATH.c_str()) == 0, "rename");
 
-    // make rename survive crash
     int d = open("../output", O_RDONLY | O_DIRECTORY);
     must(d >= 0, "open output dir");
     must(fsync(d) == 0, "fsync output dir");
@@ -217,7 +203,6 @@ static void replicate(int follower) {
     bool snap_sent_recently = steady_clock::now() - snap_sent[follower] <= seconds(10);
     bool is_connected = my_fd_to[follower].load() >= 0;
 
-    // if snap was not sent to this node in the last 10 seconds
     if (suffix_starts_in_snap && !snap_sent_recently && is_connected) {
         snap_sent[follower] = steady_clock::now();
         note("snap_sent", to_string(follower));
@@ -249,7 +234,6 @@ static void startELEC() {
     xnt log_index;
     xnt term_of_last_log_entry;
 
-    // LOCK
     {
         lock_guard g(ROCK);
 
@@ -271,7 +255,6 @@ static void startELEC() {
         term_when_ELEC_started = curTerm;
         get_log_idx_and_last_log_term(log_index, term_of_last_log_entry);
     }
-    // LOCK
 
     broadcast(build_Vreq(term_when_ELEC_started, log_index, term_of_last_log_entry));
 }
@@ -299,7 +282,6 @@ static void HBthread() {
     }
 }
 
-// dashboard reads one of these from every node 4 times a second
 static void STATthread() {
     while (true) {
         sleep_for(milliseconds(250));
@@ -312,15 +294,12 @@ static void STATthread() {
 
 void raft_init() {
 
-    // init
     curTerm = 0;
     votedFor = NO_VOTE;
 
-    // reboot
     ifstream f(RAFT_PATH);
     bool isReboot = f.is_open() && (f >> curTerm >> votedFor);
 
-    // all
     role = FOLLOWER;
     leader = NO_LEADER;
     in_votes.clear();
@@ -469,11 +448,9 @@ void onVReq(int c_ID, xnt c_Term, xnt c_LogIDX, xnt c_LogTERM) {
     xnt term_when_VR;
     bool yes_or_no;
 
-    // LOCK
     {
         lock_guard g(ROCK);
 
-        // newer term
         if (c_Term > curTerm) {
             curTerm = c_Term;
             role = FOLLOWER;
@@ -482,7 +459,6 @@ void onVReq(int c_ID, xnt c_Term, xnt c_LogIDX, xnt c_LogTERM) {
             save_tv();
         }
 
-        // my log
         xnt my_LogIDX;
         xnt my_LogTERM;
         get_log_idx_and_last_log_term(my_LogIDX, my_LogTERM);
@@ -493,7 +469,6 @@ void onVReq(int c_ID, xnt c_Term, xnt c_LogIDX, xnt c_LogTERM) {
 
         yes_or_no = termOk && logOk && voteOk;
 
-        // vote
         if (yes_or_no) {
             votedFor = c_ID;
             save_tv();
@@ -503,7 +478,6 @@ void onVReq(int c_ID, xnt c_Term, xnt c_LogIDX, xnt c_LogTERM) {
 
         term_when_VR = curTerm;
     }
-    // LOCK
 
     Psend(c_ID, build_Vres(term_when_VR, yes_or_no));
 }
@@ -525,7 +499,6 @@ void onVRes(int c_ID, xnt c_Term, bool was_vote_granted) {
         return;
     }
 
-    // if no
     if (role != CANDIDATE || !was_vote_granted)
         return;
 

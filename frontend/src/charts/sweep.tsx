@@ -2,10 +2,8 @@ import { useState } from 'react'
 import type { PointerEvent } from 'react'
 import { VARIANT_COLORS, linePath, niceCeil, useWidth } from './scale.ts'
 
-// one line per variant of the protocol, the knob that was turned along the bottom
-
-const LEFT = 64
-const RIGHT = 150 // room for a name at the end of each line
+const LEFT = 88
+const RIGHT = 150
 const TOP = 14
 const PLOT_H = 250
 
@@ -16,13 +14,14 @@ export type SweepSeries = {
 
 type SweepChartProps = {
     xName: string
+    yName: string
     series: SweepSeries[]
     ideal: { x: number, y: number }[] | null
     format: (value: number) => string
     yMax: number | null
 }
 
-function SweepChart({ xName, series, ideal, format, yMax }: SweepChartProps) {
+function SweepChart({ xName, yName, series, ideal, format, yMax }: SweepChartProps) {
     const { ref, width } = useWidth<HTMLDivElement>()
     const [hoverX, setHoverX] = useState<number | null>(null)
 
@@ -31,13 +30,14 @@ function SweepChart({ xName, series, ideal, format, yMax }: SweepChartProps) {
 
     const ys = series.flatMap(line => line.points.flatMap(point => [point.y, point.hi])).filter((y): y is number => y !== null)
     const top = yMax ?? niceCeil(Math.max(1e-9, ...ys))
-    const plotW = Math.max(80, width - LEFT - RIGHT)
+    const narrow = width < 560
+    const plotW = Math.max(80, width - LEFT - (narrow ? 24 : RIGHT))
     const xLo = xs[0], xHi = xs[xs.length - 1] === xs[0] ? xs[0] + 1 : xs[xs.length - 1]
     const x = (value: number) => LEFT + ((value - xLo) / (xHi - xLo)) * plotW
     const y = (value: number) => TOP + PLOT_H - (Math.min(value, top) / top) * PLOT_H
     const yTicks = [0, 0.25, 0.5, 0.75, 1].map(share => share * top)
+    const height = TOP + PLOT_H + 48
 
-    // a name at the end of a line only helps while the ends stay apart
     const ends = series.map(line => line.points.filter(point => point.y !== null).slice(-1)[0])
     const endsCollide = ends.some((end, i) => ends.some((other, j) => i < j && end && other
         && Math.abs(y(end.y as number) - y(other.y as number)) < 15))
@@ -57,7 +57,7 @@ function SweepChart({ xName, series, ideal, format, yMax }: SweepChartProps) {
                 {ideal && <span><span className="line-key dashed" /> best any protocol could do</span>}
             </p>
             {width > 0 && (
-                <svg width={width} height={TOP + PLOT_H + 48} role="img" aria-label={`each variant against ${xName}`}
+                <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`each variant against ${xName}`}
                      onPointerMove={onPointerMove} onPointerLeave={() => setHoverX(null)}>
                     {yTicks.map(tick => (
                         <g key={tick}>
@@ -65,6 +65,7 @@ function SweepChart({ xName, series, ideal, format, yMax }: SweepChartProps) {
                             <text className="tick" x={LEFT - 8} y={y(tick) + 4} textAnchor="end">{format(tick)}</text>
                         </g>
                     ))}
+                    <text className="axis-name" x={0} y={0} textAnchor="middle" transform={`translate(14, ${TOP + PLOT_H / 2}) rotate(-90)`}>{yName}</text>
                     {xs.map(value => <text key={value} className="tick" x={x(value)} y={TOP + PLOT_H + 18} textAnchor="middle">{value}</text>)}
                     <text className="axis-name" x={LEFT + plotW / 2} y={TOP + PLOT_H + 40} textAnchor="middle">{xName}</text>
                     <line className="baseline" x1={LEFT} x2={LEFT + plotW} y1={y(0)} y2={y(0)} />
@@ -82,7 +83,7 @@ function SweepChart({ xName, series, ideal, format, yMax }: SweepChartProps) {
                                 {drawn.map(point => (
                                     <circle key={point.x} className="marker" fill={VARIANT_COLORS[i]} cx={x(point.x)} cy={y(point.y as number)} r={hoverX === point.x ? 6 : 4.5} />
                                 ))}
-                                {!endsCollide && series.length <= 4 && drawn.length > 0 && (
+                                {!narrow && !endsCollide && series.length <= 4 && drawn.length > 0 && (
                                     <text className="end-label" x={x(drawn[drawn.length - 1].x) + 10} y={y(drawn[drawn.length - 1].y as number) + 4}>{line.label}</text>
                                 )}
                             </g>

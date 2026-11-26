@@ -14,12 +14,12 @@ variable "region" {
 
 variable "source_ami" {
   type    = string
-  default = "ami-0db1c5c6dc64eb019" # al2023-ami-2023.12.20260817.0-kernel-6.12-x86_64
+  default = "ami-0db1c5c6dc64eb019"
 }
 
 variable "build_instance_type" {
   type    = string
-  default = "t3.micro" # matches the actual bastion instance type - no reason to build bigger
+  default = "t3.micro"
 }
 
 variable "repo_url" {
@@ -71,7 +71,6 @@ build {
     ]
   }
 
-  # --- Cleanup ---
   provisioner "shell" {
     inline = [
       "set -eux",

@@ -1,14 +1,11 @@
-# don't commit terraform
 **/.terraform/
 *.tfstate
 *.tfstate.backup
 .terraform.lock.hcl
 
-# SSH keys — never commit private keys
 *.pem
 *.key
 
-# C++ build artifacts
 build/
 engine/build/
 cmake-build-*/
@@ -17,22 +14,17 @@ cmake-build-*/
 *.out
 *.dSYM/
 
-# Python
 venv/
 __pycache__/
 *.pyc
 
-# macOS
 .DS_Store
 
-# CLion
 .idea/
 
-# runtime output
 engine/src/output
 engine/debug
 
-# what test.py + relay.py leave behind on the bastion
 runs/
 relay_epoch
 

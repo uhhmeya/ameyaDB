@@ -12,13 +12,11 @@
 #include <vector>
 #include <optional>
 
-// namespaces
 using namespace std;
 using namespace std::chrono;
 using namespace this_thread;
 using namespace filesystem;
 
-// types
 using str_arr_1D = unordered_set<string>;
 using str_arr_2D = unordered_map<string, string>;
 using xnt = uint32_t;
@@ -41,7 +39,6 @@ struct entry {
     xnt checksum{0};
 };
 
-// enums
 enum Op {
     WRITE          = 1,
     READ           = 2,
@@ -58,19 +55,16 @@ enum Status : uint8_t {
     IDK             = 13,
 };
 
-// sentinels
 inline constexpr int NO_LEADER = -1;
 inline constexpr int NO_VOTE   = -1;
 inline const string  NO_OP     = "~no_op~";
 
-// global variables
 extern int myNodeID;
 extern std::atomic<xnt> log_index;
 inline constexpr int NUM_NODES = 5;
 extern std::vector<std::atomic<int>> my_fd_to;
 extern std::atomic<int> relay_fd;
 
-// utils
 inline xnt now_ms() {
     return std::chrono::duration_cast<milliseconds>(
         system_clock::now().time_since_epoch()
@@ -98,9 +92,6 @@ inline int rand_sleep_timer_ms(int lo, int hi) {
     return dist(rng);
 }
 
-//* shared methods
-
-// shared methods
 void truncate_wal(xnt last_log_idx_in_snap, xnt last_term_in_snap);
 xnt get_log_idx();
 xnt get_last_log_term();

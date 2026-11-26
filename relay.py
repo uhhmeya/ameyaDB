@@ -5,16 +5,15 @@ import json
 import subprocess
 import time
 
-HOST = "0.0.0.0" # anyone can connect
-WS_PORT = 8765 # browser + testy
-NODE_PORT = 9000 # node processes
-EC2_PORT = 9001 # an ec2's build script when compiling fails, and the crash script when a node goes dark
+HOST = "0.0.0.0"
+WS_PORT = 8765
+NODE_PORT = 9000
+EC2_PORT = 9001
 NUM_NODES = 5
 
-EPOCH_PATH = "relay_epoch" # which data epoch the nodes should be on, survives relay restarts
-RUNS_PATH = "runs" # testy saves every run in here
+EPOCH_PATH = "relay_epoch"
+RUNS_PATH = "runs"
 
-# handlers
 browsers = set()
 testy_ws = None
 testy_process = None
@@ -24,11 +23,9 @@ nodes_seen_before = set()
 state = {n: "dead" for n in range(NUM_NODES)}
 compile_failed = False
 
-# data
 epoch = 0
 keep_old_data = False
 
-# what a browser needs to draw the page even if it connects late
 catalog = {}
 history = []
 current_run = []
@@ -62,7 +59,6 @@ async def inform_browser(event=None, report=None):
     for browser_ws in list(browsers):
         await send(browser_ws, payload)
 
-# nodes wipe their wal, snap and term when the epoch they boot into is not the one on their disk
 def load_epoch():
     global epoch, keep_old_data
     try:
@@ -76,14 +72,12 @@ def start_new_epoch(keep):
     epoch, keep_old_data = time.time_ns() // 1000000, keep
     with open(EPOCH_PATH, "w") as f: f.write(f"{epoch} {int(keep)}")
 
-# running nodes restart themselves when they hear a new epoch, the rest pick it up when they connect
 async def reset_cluster(keep):
     start_new_epoch(keep)
     for node_id in list(node_writers):
         await send_to_node(node_id, f"epoch {epoch} {int(keep_old_data)}")
     await inform_browser("database cleared" + (", old data kept on the nodes for debugging" if keep else ""))
 
-# testy is gone, so nobody else will undo what it did to the cluster
 async def heal_cluster():
     for node_id in list(node_writers):
         await send_to_node(node_id, "link all 0 0 0")
@@ -97,7 +91,6 @@ async def on_node_process(reader, writer):
             try: line = await reader.readline()
             except ConnectionResetError: line = b""
 
-            # FIN or RST
             if not line:
                 if node_id is not None and node_writers.get(node_id) is writer:
                     state[node_id] = "dead"
@@ -112,13 +105,11 @@ async def on_node_process(reader, writer):
                 node_writers[node_id] = writer
                 state[node_id] = "born dead"
 
-                # epoch goes first so the node knows it before anyone tells it to load its data
                 await send_to_node(node_id, f"epoch {epoch} {int(keep_old_data)}")
 
                 is_restart = node_id in nodes_seen_before
                 nodes_seen_before.add(node_id)
 
-                # tell testy that node is born dead
                 if is_restart:
                     await inform_browser(f"node{node_id} up")
                 else:
@@ -134,12 +125,9 @@ async def on_node_process(reader, writer):
             elif msg["type"] == "agreement_check_res":
                 await send(testy_ws, {"node": node_id, "agreement_check_res": msg["msg"]})
 
-            # a node lost its wire to a peer. testy cut that link on purpose and already knows,
-            # and the dashboard sees the wire go down in the node's next stat
             elif msg["type"] == "unreachable":
                 pass
 
-            # everything else is telemetry: stat, elec, leader, vote, hash, booted, fault ...
             else:
                 await send(testy_ws, {"tm": msg})
 
@@ -148,16 +136,13 @@ async def on_node_process(reader, writer):
             del node_writers[node_id]
         writer.close()
 
-# one line from a script on an ec2, not from a node process
 async def on_ec2(reader, writer):
     global compile_failed
     msg = json.loads(await reader.readline())
 
-    # crash script: firewall is up, the node is about to die
     if msg["type"] == "cut":
         await send(testy_ws, {"tm": {"node": msg["node"], "type": "cut", "wall_us": msg["wall_us"], "msg": ""}})
 
-    # tell browser if compile failed
     else:
         compile_failed = True
         await inform_browser(f"node{msg['node']} failed to compile")
@@ -170,12 +155,10 @@ async def start_test(config):
         return
     testy_process = await asyncio.create_subprocess_exec("python3", "test.py", json.dumps(config))
 
-# testy --> relay --> browser. remembered so a browser that shows up late can catch up
 async def on_testy_report(report):
     global current_run, current_sweep
     del report["to"]
 
-    # a run that is not part of a sweep replaces whatever sweep was on screen
     if "run" in report:
         current_run = []
         if not report["run"]["sweep"]: current_sweep = None
@@ -217,14 +200,12 @@ async def on_browser_or_testy(websocket):
             elif data["to"] == "relay" and data["msg"] == "stop":
                 if testy_process and testy_process.returncode is None: testy_process.terminate()
 
-            # start test
             elif data["to"] == "relay":
                 await start_test(data.get("config", {}))
 
             elif data["to"] == "browser":
                 await on_testy_report(data)
 
-            # forward msg to node
             else:
                 await send_to_node(data["to"], data["msg"])
 
@@ -241,7 +222,6 @@ async def on_browser_or_testy(websocket):
 def load_catalog_and_history():
     global catalog
 
-    # test.py knows which scenarios + sweeps exist, the browser builds its menu from this
     try: catalog = json.loads(subprocess.check_output(["python3", "test.py", "catalog"]))
     except (OSError, ValueError, subprocess.CalledProcessError): catalog = {}
 
@@ -254,14 +234,12 @@ async def main():
     load_epoch()
     load_catalog_and_history()
 
-    # accept incoming con req from browser
     async with websockets.serve(on_browser_or_testy, HOST, WS_PORT, max_size=None):
         while not browsers:
             await asyncio.sleep(0.2)
 
         print("relay & browser are connected", flush=True)
 
-        # accept incoming con req from node processes and ec2 scripts
         node_server = await asyncio.start_server(on_node_process, HOST, NODE_PORT)
         ec2_server = await asyncio.start_server(on_ec2, HOST, EC2_PORT)
         async with node_server, ec2_server:

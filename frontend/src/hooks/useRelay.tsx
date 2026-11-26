@@ -1,23 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 
-// `VITE_RELAY_URL=ws://127.0.0.1:8765 npm run dev` points the page at a relay somewhere else
 const RELAY_URL: string = import.meta.env.VITE_RELAY_URL ?? "ws://107.20.154.53:8765"
 const INITIAL_BACKOFF_MS = 500
 const MAX_BACKOFF_MS = 5000
 
 export const NUM_NODES = 5
 
-// ---- what test.py sends, see make_frame() and judge_run() in test.py
-
 export type NodeNow = {
-    up: number // 0 down, 1 fine, 2 process is there but has gone quiet (frozen or limping)
-    role?: number // 0 follower, 1 candidate, 2 leader, 3 asking for pre-votes
+    up: number
+    role?: number
     term?: number
     commit?: number
-    conn?: number // bit n is set when this node has a live tcp wire to node n
+    conn?: number
 }
 
-// [seconds since the run began, node, what happened, term]
 export type TimelineEvent = [number, number, string, number]
 
 export type Fault = {
@@ -48,7 +44,7 @@ export type Frame = {
     max: number | null
     served: number
     viable: boolean
-    links: string // 25 chars, row = sender, column = receiver. 0 fine, 1 firewall cut, 2 all msgs dropped, 3 lossy, 4 slow
+    links: string
     vreq: number
     ev: TimelineEvent[]
     fx: Fault[]
@@ -99,8 +95,8 @@ export type Summary = {
     short: ShortRun
     nodes: (NodeAtEnd | null)[]
     faults: Fault[]
-    window: [number, number, number] // faults began, healed, measuring stopped
-    outages: [number, number, number][] // start, end, seconds of it a leader was possible
+    window: [number, number, number]
+    outages: [number, number, number][]
 }
 
 export type SweepPoint = Metrics & {
@@ -134,7 +130,6 @@ export type ClusterStatus = {
     busy: boolean
 }
 
-// everything needed to draw one run, live or from a saved file
 export type Recording = {
     header: RunHeader | null
     frames: Frame[]
@@ -159,7 +154,6 @@ export function useRelay() {
     const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const cancelledRef = useRef(false)
 
-    // frames arrive twice a second for minutes. they pile up in refs and the page redraws once per animation frame
     const recordingRef = useRef<Recording>(emptyRecording(null))
     const eventsRef = useRef<string[]>([])
     const historyRef = useRef<ShortRun[]>([])
@@ -217,7 +211,6 @@ export function useRelay() {
             if (update.run) recordingRef.current = emptyRecording(update.run)
             if (update.frame) addFrame(recordingRef.current, update.frame)
             if (update.summary) {
-                // the summary's faults carry the timings that were worked out after the run
                 recordingRef.current.summary = update.summary
                 recordingRef.current.faults = update.summary.faults
                 if (!historyRef.current.some(run => run.id === update.summary.short.id))
@@ -226,9 +219,8 @@ export function useRelay() {
             redraw()
         }
 
-        // relay isn't up yet or went away: retry with backoff
         ws.onclose = () => {
-            if (wsRef.current !== ws) return // stale socket from strict mode's double mount
+            if (wsRef.current !== ws) return
             setConnected(false)
             if (cancelledRef.current) return
             retryTimerRef.current = setTimeout(connectToRelay, backoffRef.current)
@@ -246,7 +238,6 @@ export function useRelay() {
         wsRef.current?.send(JSON.stringify(data))
     }
 
-    // a run that was downloaded earlier, so it can be looked at again without the cluster
     function openSavedRun(saved: { run: RunHeader, frames: Frame[], summary: Summary | null }) {
         const recording = emptyRecording(saved.run)
         for (const frame of saved.frames) addFrame(recording, frame)

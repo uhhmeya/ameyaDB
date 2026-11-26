@@ -39,11 +39,6 @@ resource "aws_subnet" "public" {
   tags = { Name = "ameyaDB-public" }
 }
 
-# NAT gateway + its EIP bill by the hour even with every node stopped, so they
-# only exist while the cluster is up. dooby.sh's start-up apply leaves this at
-# the default (true) and recreates them; on exit it applies with
-# -var nat_enabled=false to delete them. Default stays true so a plain
-# `terraform apply` can never pull the NAT out from under running nodes.
 variable "nat_enabled" {
   type    = bool
   default = true
@@ -61,7 +56,6 @@ resource "aws_nat_gateway" "geochron" {
   tags          = { Name = "ameyaDB-nat" }
 }
 
-# These two used to be single resources; keep their state when count was added.
 moved {
   from = aws_eip.nat
   to   = aws_eip.nat[0]
@@ -83,9 +77,6 @@ resource "aws_route_table" "public" {
 
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.geochron.id
-  # One route per NAT that exists -- i.e. one while the cluster is up, none
-  # while it's down. With none, the old route is left in place as a harmless
-  # "blackhole" (nothing is running to use it); the next start repoints it.
   dynamic "route" {
     for_each = aws_nat_gateway.geochron[*].id
     content {
@@ -123,8 +114,6 @@ resource "aws_security_group" "db_nodes" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Raft peer mesh: node i listens on 8080 + i (nodes 0-4 -> 8080-8084).
-  # All peer traffic (WRITE / READ / REQUEST_VOTE) is multiplexed over these.
   ingress {
     from_port   = 8080
     to_port     = 8084
@@ -139,9 +128,6 @@ resource "aws_security_group" "db_nodes" {
     cidr_blocks = ["10.0.0.0/16"]
   }
 
-  # Relay: nodes dial out to relay.py (listening on the bastion) to report
-  # status on 9000; a node's build script reports compile failures on 9001.
-  # Only needs to allow traffic from inside the VPC.
   ingress {
     from_port   = 9000
     to_port     = 9001
@@ -149,8 +135,6 @@ resource "aws_security_group" "db_nodes" {
     cidr_blocks = ["10.0.0.0/16"]
   }
 
-  # Relay WS: your browser connects here from anywhere to watch the cluster.
-  # Open to the internet for now -- lock this down later (see notes).
   ingress {
     from_port   = 8765
     to_port     = 8765
@@ -185,7 +169,6 @@ resource "aws_iam_instance_profile" "db_node" {
   role = aws_iam_role.db_node.name
 }
 
-# Persistent data volumes -- survive EC2 termination for chaos testing
 resource "aws_ebs_volume" "db_node" {
   count             = 5
   availability_zone = "us-east-1${["a", "b", "c", "d", "f"][count.index]}"
@@ -200,8 +183,6 @@ resource "aws_volume_attachment" "db_node" {
   volume_id   = aws_ebs_volume.db_node[count.index].id
   instance_id = aws_instance.db_node[count.index].id
 
-  # Never rip a mounted ext4 filesystem out from under a live instance.
-  # Only matters when you run `dooby.sh --fresh`, which replaces the nodes.
   stop_instance_before_detaching = true
 }
 
@@ -219,25 +200,13 @@ resource "aws_instance" "db_node" {
   iam_instance_profile   = aws_iam_instance_profile.db_node.name
   vpc_security_group_ids = [aws_security_group.db_nodes.id]
 
-  # The NAT is recreated on every dooby start, and every node boot clones
-  # from GitHub through it. Without this, `dooby.sh --fresh` could launch the
-  # replacement nodes while the NAT is still being built, the clone would
-  # fail, and ameyaDB.service would refuse to start (it Requires= the build).
   depends_on = [aws_route_table.private]
 
-  # NOTE: every line below is flush at column 0 on purpose. Terraform's <<-
-  # heredoc strips the SMALLEST indent found in the body, so a single flush
-  # line (like `cat > ...`) makes the strip amount 0 and leaves the shebang
-  # indented -- which stops cloud-init from recognising this as a script.
   user_data = <<-EOF
 #!/bin/bash
 set -x
 exec >> /var/log/user-data.log 2>&1
 
-# The EBS data volume is attached by a SEPARATE terraform resource, which
-# lands ~20s AFTER this instance boots. Wait for the device instead of
-# racing it. m7i is Nitro, so the kernel name is nvme1n1; /dev/xvdf only
-# exists if the AMI ships the ec2-utils udev rules.
 DEV=""
 for i in $(seq 1 60); do
   for cand in /dev/xvdf /dev/sdf /dev/nvme1n1; do
@@ -257,7 +226,6 @@ fi
 mkdir -p /var/log/ameyaDB
 mount "$DEV" /var/log/ameyaDB
 
-# fstab by UUID -- NVMe enumeration order is not stable across reboots.
 VOL_UUID=$(blkid -s UUID -o value "$DEV")
 if ! grep -q "$VOL_UUID" /etc/fstab; then
   echo "UUID=$VOL_UUID /var/log/ameyaDB ext4 defaults,nofail 0 2" >> /etc/fstab
@@ -266,17 +234,8 @@ fi
 mkdir -p /var/log/ameyaDB/server
 chown -R ec2-user:ec2-user /var/log/ameyaDB
 
-# Every partition and every simulated crash is built on iptables, so a missing
-# binary would break chaos testing silently -- the node shells out with
-# system(), which discards the failure. Make sure it is here before anything
-# depends on it.
 command -v iptables >/dev/null 2>&1 || dnf install -y iptables || yum install -y iptables
 
-# ---- time stack repair (all three are Amazon Linux 2 version skew) ----
-
-# 1. chrony.conf points at the PTP hardware clock, but AL2's ENA driver has no
-#    PTP support so /dev/ptp_ena never appears -- and chronyd treats that as
-#    FATAL. Dead chronyd took clockbound down, which took ameyaDB down.
 if [ ! -e /dev/ptp_ena ]; then
   sed -i 's|^refclock PHC|#refclock PHC|' /etc/chrony.conf
   if ! grep -q '169.254.169.123' /etc/chrony.conf; then
@@ -285,21 +244,10 @@ if [ ! -e /dev/ptp_ena ]; then
   systemctl restart chronyd
 fi
 
-# 2. The clockbound unit baked into this AMI passes --ip, which ClockBound 1.x
-#    removed when it moved from a UDP socket to shared memory (exit 2).
 mkdir -p /var/log/clockbound
 sed -i 's|^ExecStart=.*|ExecStart=/usr/bin/clockbound|' /etc/systemd/system/clockbound.service
 systemctl daemon-reload
 
-# 3. ClockBound 1.x enables VMClock on every non-metal EC2 instance and panics
-#    (exit 101) when /dev/vmclock0 is missing. That device needs the
-#    ptp_vmclock driver, absent from AL2's 4.14 kernel. `disable` alone is NOT
-#    enough: ameyaDB's Wants= re-triggers a start whenever ameyaDB starts, and
-#    clockbound's own Restart=on-failure then panic-loops it every 2s forever.
-#    A start condition parks it quietly instead -- a failed condition is not a
-#    unit failure, so no restart loop -- and it lights up automatically on an
-#    AL2023 rebuild where the device exists. ameyaDB falls back to adjtimex
-#    bounds either way.
 if ! grep -q 'ConditionPathExists=/dev/vmclock0' /etc/systemd/system/clockbound.service; then
   sed -i '/^\[Unit\]/a ConditionPathExists=/dev/vmclock0' /etc/systemd/system/clockbound.service
 fi
@@ -323,27 +271,14 @@ g++ -std=c++20 -O2 -pthread -o /home/ec2-user/ameyaDB/engine/src/output/EXEC/ser
   exit 1
 }
 
-# The chaos scripts get copied OUT of the repo, not run from it. The repo sits
-# under /home/ec2-user, which ec2-user can write to freely -- and both scripts
-# below get a NOPASSWD sudo grant. Pointing that grant at a file ec2-user can
-# rewrite would hand it root for free. /usr/local/bin is root-owned, so the
-# node can execute them but not edit them.
 install -m 0755 /home/ec2-user/ameyaDB/engine/src/scripts/ameyaDB-allow.sh /usr/local/bin/ameyaDB-allow.sh
 install -m 0755 /home/ec2-user/ameyaDB/engine/src/scripts/ameyaDB-crash.sh /usr/local/bin/ameyaDB-crash.sh
 
-# The node runs as ec2-user, but iptables and systemctl are root-only.
-# systemd-run is here because the crash script has to outlive the process that
-# launches it -- see the comment on ameyaDB-crash.sh.
 echo 'ec2-user ALL=(root) NOPASSWD: /usr/local/bin/ameyaDB-allow.sh, /usr/local/bin/ameyaDB-crash.sh, /usr/bin/systemd-run' > /etc/sudoers.d/ameyaDB-net
 chmod 0440 /etc/sudoers.d/ameyaDB-net
 SCRIPT
 chmod +x /usr/local/bin/build_ameyaDB.sh
 
-# Build ONCE per boot (oneshot), not on every restart. Splitting build from
-# run is what makes rebirth fast: a chaos-test crash now relaunches the
-# existing binary in ~1-2s instead of re-cloning GitHub + recompiling for a
-# minute-plus. New code still lands naturally: every dooby stop/start cycle
-# is a fresh boot, and a fresh boot reruns this unit.
 cat > /etc/systemd/system/ameyaDB-build.service << 'UNIT'
 [Unit]
 Description=ameyaDB build (once per boot)
@@ -364,33 +299,15 @@ cat > /etc/systemd/system/ameyaDB.service << 'UNIT'
 Description=ameyaDB node
 After=network-online.target clockbound.service ameyaDB-build.service
 Wants=network-online.target
-# Wants=, NOT Requires=. Requires= propagates STOPS: every time clockbound
-# hit its failed state systemd tore this service down with it, which is what
-# the restart storm actually was. The server degrades to adjtimex bounds on
-# its own when clockbound is absent.
 Wants=clockbound.service
-# The build is different: it IS a hard dependency (there is no binary without
-# it), and a oneshot with RemainAfterExit never "stops" after success, so
-# Requires= cannot propagate a stop here. If the build fails, this service
-# correctly refuses to start instead of crash-looping on a missing binary.
 Requires=ameyaDB-build.service
-# Refuse to start if the data volume did not mount, instead of silently
-# writing the WAL to the root disk (which dies with the instance).
 RequiresMountsFor=/var/log/ameyaDB
-# Crashing on purpose is this service's job during chaos tests. Never let
-# systemd park it as "failed" for restarting too often. (AL2023's systemd is
-# modern, so the [Unit] StartLimitIntervalSec spelling is the right one now.)
 StartLimitIntervalSec=0
 
 [Service]
 Type=simple
 User=ec2-user
 WorkingDirectory=/var/log/ameyaDB/server
-# Clear any DROP rules left over from a chaos test before coming up. If a
-# crash helper is ever killed mid-sleep, its rules would otherwise outlive it
-# and leave this node firewalled off the mesh forever with no sign why.
-# The `+` prefix runs this as root despite User=ec2-user above. Healing with
-# "all" returns before it resolves any peer, so it cannot fail on boot DNS.
 ExecStartPre=+/usr/local/bin/ameyaDB-allow.sh ${count.index} all
 ExecStart=/home/ec2-user/ameyaDB/engine/src/output/EXEC/server ${count.index}
 Restart=always
@@ -403,8 +320,6 @@ systemctl daemon-reload
 systemctl enable --now ameyaDB-build.service ameyaDB.service
   EOF
 
-  # Re-run user_data if the script itself changes (only takes effect on the
-  # next replacement, but keeps the plan honest about drift).
   user_data_replace_on_change = false
 
   root_block_device {
@@ -468,8 +383,6 @@ output "bastion_ip" {
   value = aws_eip.bastion.public_ip
 }
 
-# dooby.sh needs this to start/stop the bastion. Without it the script has no
-# way to bring the bastion back, which is exactly how it ended up stranded.
 output "bastion_instance_id" {
   value = aws_instance.bastion.id
 }

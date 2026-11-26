@@ -13,10 +13,6 @@
 #include <sstream>
 #include <unistd.h>
 #include <sys/timex.h>
-// libclockbound exports plain C symbols, but /usr/include/clockbound.h has no
-// `#ifdef __cplusplus / extern "C"` guard of its own. Without this wrapper the
-// C++ compiler mangles the names (clockbound_open(clockbound_err*)) and the
-// linker cannot match them against the unmangled symbols in the .so.
 extern "C" {
 #include <clockbound.h>
 }
@@ -26,18 +22,14 @@ static mutex relay_mutex;
 
 static atomic<unsigned long long> msgs_sent_to_browser_count{0};
 
-// notes wait here so raft never blocks on the relay wire
 static mutex notes_mutex;
 static condition_variable notes_cv;
 static deque<string> notes;
 static atomic<unsigned long long> notes_lost{0};
 static long long life_count = 0;
 
-// reference to connection with CB
-// CB is how we get accurate time
 static clockbound_ctx *cb_ctx = nullptr;
 
-// utils
 static long long read_life_count(const string &path) {
     long long cur = 0;
     if (FILE *f = fopen(path.c_str(), "r")) {
@@ -77,7 +69,7 @@ static long long phc_error_bound_us() {
     if (fscanf(f, "%lld", &ns) != 1) ns = -1;
     fclose(f);
     if (ns < 0) return -1;
-    return (ns + 999) / 1000;   // round up; never understate the bound
+    return (ns + 999) / 1000;
 }
 static long long kernel_error_bound_us() {
     struct timex tx {};
@@ -96,7 +88,7 @@ long long get_and_update_life_count(int node_id) {
 
     save_life_count(life_path, this_life);
 
-    life_count = this_life; // file scope variable
+    life_count = this_life;
     return this_life;
 }
 static void get_cur_time(long long &wall_us, long long &err_us) {
@@ -109,7 +101,7 @@ static void get_cur_time(long long &wall_us, long long &err_us) {
             const long long latest =
                 static_cast<long long>(now.latest.tv_sec) * 1000000LL + now.latest.tv_nsec / 1000;
             wall_us = (earliest + latest) / 2;
-            err_us  = (latest - earliest + 1) / 2;   // half-width, rounded up
+            err_us  = (latest - earliest + 1) / 2;
             return;
         }
     }
@@ -119,10 +111,6 @@ static void get_cur_time(long long &wall_us, long long &err_us) {
     if (err_us < 0) err_us = kernel_error_bound_us();
 }
 
-// The clockbound build installed on this AMI declares
-//     clockbound_ctx* clockbound_open(clockbound_err *err);
-// i.e. one argument, no shm path -- the daemon's socket location is compiled
-// into the library. Passing CLOCKBOUND_SHM_DEFAULT_PATH is a newer API.
 void connect_to_CB() {
     clockbound_err cb_err {};
     cb_ctx = clockbound_open(&cb_err);
@@ -140,7 +128,6 @@ void print(const std::string &msg) {
     tm local_tm{};
     localtime_r(&tt, &local_tm);
 
-    // t (node) (msg)
     ostringstream line;
     line << put_time(&local_tm, "%M:%S") << '.'
          << setw(3) << setfill('0') << curTime_ms.count()
@@ -174,7 +161,6 @@ static string json_escape(const string &s) {
 }
 
 
-// {"node":1,"life":3,"seq":42,"wall_us":172495512345,"err_us":12,"type":"wire","msg":"1 3 up"}
 static string relay_line(const std::string &type, const std::string &msg) {
 
     const unsigned long long seq = msgs_sent_to_browser_count.fetch_add(1, memory_order_relaxed);
@@ -208,7 +194,6 @@ void send_to_relay(const std::string &type, const std::string &msg) {
     write_to_relay(relay_line(type, msg));
 }
 
-// same as send_to_relay but never waits on the wire, safe to call while holding ROCK
 void note(const std::string &type, const std::string &msg) {
     string line = relay_line(type, msg);
     {

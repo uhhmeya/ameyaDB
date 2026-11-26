@@ -1,31 +1,4 @@
 #!/usr/bin/env python3
-"""
-Patches clock-bound's daemon/io.rs to stop hard-panicking when the VMClock
-device (/dev/vmclock0) isn't present on the instance.
-
-Discovered live, on a running node: clock-bound 3.0.0-alpha.1 (the tip of
-both its tags and `main` as of this writing - there is no upstream fix)
-unconditionally tries to enable AWS's VMClock device on any non-metal EC2
-instance, and hard panics (process exit 101) if that device isn't present.
-VMClock is separate from PHC and isn't exposed on m7i.large / this AMI - so
-without this patch, clockbound crash-loops immediately on every boot.
-
-The fix mirrors the graceful-fallback pattern the same function already uses
-for its other failure modes (IMDS failure, metal-instance detection): turn
-the `.unwrap_or_else(|_| panic!(...))` on VMClock::construct() into a match
-that logs a warning and returns instead of panicking.
-
-This uses a regex anchored on the distinctive, non-whitespace parts of the
-snippet (VMClock::construct(...) ... .unwrap_or_else(|_| panic!(...))) with
-free-form whitespace in between, rather than a byte-for-byte literal string
-match - indentation of this block has already been observed to differ
-between checkouts even at the same pinned tag (8 spaces vs 16 spaces seen in
-practice), and a literal match is too brittle against that. The regex still
-asserts exactly one match before rewriting, and preserves the original
-indentation of the matched block in the replacement, so this fails loudly
-(non-zero exit) instead of silently no-op'ing if clock-bound's source
-changes in some more fundamental way upstream.
-"""
 import re
 import sys
 
@@ -34,10 +7,6 @@ path = "/home/ec2-user/clock-bound/clock-bound/src/daemon/io.rs"
 with open(path) as f:
     src = f.read()
 
-# Matches (capturing the leading indentation of the `let vmclock = ...` line):
-#   <indent>let vmclock = VMClock::construct(
-#       ... anything (non-greedy) ...
-#   .unwrap_or_else(|_| panic!("vmclock device not found {vmclock_shm_path}"));
 pattern = re.compile(
     r'(?P<indent>[ \t]*)let vmclock = VMClock::construct\((?P<args>.*?)\)\s*'
     r'\.await\s*'

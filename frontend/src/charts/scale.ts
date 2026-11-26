@@ -1,11 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 
-// one colour per node, the same on every chart. validated against the sheet colour
-// with the dataviz palette checker (colourblind-safe as neighbours, >= 3:1 contrast)
 export const NODE_COLORS = ['var(--n0)', 'var(--n1)', 'var(--n2)', 'var(--n3)', 'var(--n4)']
 export const VARIANT_COLORS = ['var(--n0)', 'var(--n1)', 'var(--n2)']
 
-// smallest of 1, 2, 5 x 10^n that is >= value, so an axis ends on a round number
 export function niceCeil(value: number): number {
     if (value <= 0) return 1
     const power = Math.pow(10, Math.floor(Math.log10(value)))
@@ -15,7 +12,6 @@ export function niceCeil(value: number): number {
     return 10 * power
 }
 
-// index of the frame closest to time t
 export function nearestFrame(frames: { t: number }[], t: number): number {
     let best = 0
     for (let i = 1; i < frames.length; i++) {
@@ -59,7 +55,6 @@ export function linePath(points: [number, number][]): string {
     return points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join('')
 }
 
-// a line that holds its value until the next point, for things that change in jumps
 export function stepPath(points: [number, number][]): string {
     let path = ''
     points.forEach(([x, y], i) => {
@@ -68,14 +63,15 @@ export function stepPath(points: [number, number][]): string {
     return path
 }
 
-// charts are drawn in real pixels, so they need to know how wide their box is
 export function useWidth<Box extends HTMLElement>() {
     const ref = useRef<Box | null>(null)
     const [width, setWidth] = useState(0)
 
     useEffect(() => {
         if (!ref.current) return
-        const observer = new ResizeObserver(entries => setWidth(entries[0].contentRect.width))
+        const observer = new ResizeObserver(entries => {
+            if (!window.matchMedia('print').matches) setWidth(entries[0].contentRect.width)
+        })
         observer.observe(ref.current)
         return () => observer.disconnect()
     }, [])

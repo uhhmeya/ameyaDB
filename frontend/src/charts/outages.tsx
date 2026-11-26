@@ -1,9 +1,6 @@
 import type { Summary } from '../hooks/useRelay.tsx'
 import { niceCeil, useWidth } from './scale.ts'
 
-// every stretch with no acked write, sorted by how long it lasted. the bar is the time
-// lost in that row, because fifty short blips can cost less than one long stall
-
 const BUCKETS = [
     { under: 0.2, name: 'under 200ms' },
     { under: 0.5, name: '200 to 500ms' },
@@ -39,10 +36,11 @@ function Outages({ outages }: OutagesProps) {
     }
 
     const secsMax = niceCeil(Math.max(...rows.map(row => row.avoidable + row.unavoidable)))
-    const plotW = Math.max(60, width - LABEL_W - RIGHT)
+    const plotW = Math.max(60, width - LABEL_W - (width < 560 ? 110 : RIGHT))
     const x = (seconds: number) => LABEL_W + (seconds / secsMax) * plotW
-    const ticks = [0, 0.25, 0.5, 0.75, 1].map(share => share * secsMax)
-    const height = rows.length * ROW_H + 26
+    const ticks = (width < 560 ? [0, 0.5, 1] : [0, 0.25, 0.5, 0.75, 1]).map(share => share * secsMax)
+    const plotH = rows.length * ROW_H
+    const height = plotH + 44
 
     return (
         <div className="outages" ref={ref}>
@@ -51,13 +49,14 @@ function Outages({ outages }: OutagesProps) {
                 <span><span className="swatch outage unavoidable" /> nobody could lead</span>
             </p>
             {width > 0 && (
-                <svg width={width} height={height} role="img" aria-label="seconds without an acked write, by how long each outage lasted">
+                <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label="seconds without an acked write, by how long each outage lasted">
                     {ticks.map(tick => (
                         <g key={tick}>
-                            <line className="grid" x1={x(tick)} x2={x(tick)} y1={0} y2={rows.length * ROW_H} />
-                            <text className="tick" x={x(tick)} y={rows.length * ROW_H + 16} textAnchor="middle">{+tick.toFixed(2)}s</text>
+                            <line className="grid" x1={x(tick)} x2={x(tick)} y1={0} y2={plotH} />
+                            <text className="tick" x={x(tick)} y={plotH + 16} textAnchor="middle">{+tick.toFixed(2)}s</text>
                         </g>
                     ))}
+                    <text className="axis-name" x={LABEL_W + plotW / 2} y={plotH + 36} textAnchor="middle">seconds lost, by how long each outage lasted</text>
                     {rows.map((row, i) => {
                         const y = i * ROW_H + (ROW_H - BAR_H) / 2
                         const total = row.avoidable + row.unavoidable
@@ -81,7 +80,7 @@ function Outages({ outages }: OutagesProps) {
                             </g>
                         )
                     })}
-                    <line className="baseline" x1={LABEL_W} x2={LABEL_W} y1={0} y2={rows.length * ROW_H} />
+                    <line className="baseline" x1={LABEL_W} x2={LABEL_W} y1={0} y2={plotH} />
                 </svg>
             )}
         </div>

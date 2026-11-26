@@ -2,8 +2,6 @@ import type { Frame } from '../hooks/useRelay.tsx'
 import { NUM_NODES } from '../hooks/useRelay.tsx'
 import { NODE_COLORS } from './scale.ts'
 
-// who can talk to whom at one moment. row = sender, column = receiver, so a one way fault shows up lopsided
-
 const LINK_STATES: Record<string, { name: string, mark: string }> = {
     '0': { name: 'fine', mark: '' },
     '1': { name: 'cut by the firewall', mark: '✕' },
@@ -28,7 +26,6 @@ function Links({ frame }: LinksProps) {
         for (let receiver = 0; receiver < NUM_NODES; receiver++) {
             const node = frame.nodes[sender]
 
-            // the diagonal is the node itself
             if (sender === receiver) {
                 const what = !node.up ? 'down' : node.up === 2 ? 'gone quiet' : ROLE_NAMES[node.role ?? 0]
                 cells.push(

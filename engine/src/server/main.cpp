@@ -42,7 +42,6 @@ static deque<outbox_msg> outbox[NUM_NODES];
 static steady_clock::time_point last_send_at[NUM_NODES];
 static mutex wire_mutex[NUM_NODES];
 
-// chaos knobs, only testy turns these
 static atomic<int> link_delay_ms[NUM_NODES];
 static atomic<int> link_jitter_ms[NUM_NODES];
 static atomic<int> link_drop_pct[NUM_NODES];
@@ -50,16 +49,13 @@ static atomic<int> disk_stall_ms{0};
 static mutex flags_mutex;
 static unordered_map<string, int> flags;
 
-// relay owns the epoch, data from another epoch gets cleared on boot
 static atomic<long long> relay_epoch{-1};
 static atomic<long long> loaded_epoch{-1};
 static atomic<bool> keep_old_data{false};
 
-// counters for the dashboard
 static atomic<unsigned long long> msgs_sent[SNAP + 1];
 static atomic<unsigned long long> msgs_dropped{0};
 
-// announce
 bool handle_write(int x);
 bool handle_read(int x);
 bool handle_vreq(int x);
@@ -90,7 +86,6 @@ static const string DATA_DIR = "../output";
 static const char *ALLOW_SCRIPT = "/usr/local/bin/ameyaDB-allow.sh";
 static const char *CRASH_SCRIPT = "/usr/local/bin/ameyaDB-crash.sh";
 
-// utils
 int attach_listener_to_port(int myPort) {
     int listener_fd = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -107,7 +102,6 @@ int attach_listener_to_port(int myPort) {
     if (::bind(listener_fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) < 0)
         throw runtime_error("[attach_listener_to_port] bind failed: " + string(strerror(errno)));
 
-    // a whole cluster can dial in at once -- let the backlog grow with it
     if (listen(listener_fd, max(10, NUM_NODES)) < 0)
         throw runtime_error("[attach_listener_to_port] listen failed: " + string(strerror(errno)));
 
@@ -161,7 +155,7 @@ static bool connect_with_timeout(int fd, const sockaddr_in &addr, int timeout_ms
 
     if (rc != 0) {
         pollfd p{fd, POLLOUT, 0};
-        if (poll(&p, 1, timeout_ms) != 1) return false;   // timed out
+        if (poll(&p, 1, timeout_ms) != 1) return false;
 
         int err = 0;
         socklen_t len = sizeof(err);
@@ -169,15 +163,10 @@ static bool connect_with_timeout(int fd, const sockaddr_in &addr, int timeout_ms
             return false;
     }
 
-    fcntl(fd, F_SETFL, flags);   // back to blocking for the rest of the wire's life
+    fcntl(fd, F_SETFL, flags);
     return true;
 }
 
-// tcp peer
-
-// a wire can only be closed while nobody is in the middle of writing a msg to it.
-// otherwise the kernel hands the same fd number to the next wire, and the second
-// half of that msg lands at the start of the new wire, where it gets read as garbage
 static void hang_up(int peer_id, int fd) {
     shutdown(fd, SHUT_RDWR);
 
@@ -212,7 +201,6 @@ static bool route_to_handler(int peerFD, char op) {
     else if (op == AERES) return handle_aeres(peerFD);
     else if (op == SNAP)  return handle_snap(peerFD);
 
-    // not a msg type, so this wire is out of step. drop it and let the peer redial
     return false;
 }
 
@@ -228,7 +216,6 @@ void attach_reader_to_peer_wire(int peer_id) {
     send_to_relay("unreachable", to_string(peer_id));
 }
 
-// tcp client
 static void serve_client(int fd) {
     char op = 0;
     while (read(fd, &op, 1) == 1) {
@@ -239,7 +226,6 @@ static void serve_client(int fd) {
     close(fd);
 }
 
-// chaos
 int get_flag(const string &name, int fallback) {
     lock_guard g(flags_mutex);
     auto it = flags.find(name);
@@ -254,13 +240,11 @@ string net_stat() {
     for (int peer = 0; peer < NUM_NODES; peer++)
         if (my_fd_to[peer].load() >= 0) conn |= 1 << peer;
 
-    // conn mask, vote reqs, append entries, snaps, msgs a lossy link ate
     return to_string(conn) + " " + to_string(msgs_sent[VREQ].load()) + " "
          + to_string(msgs_sent[APPEND_ENTRIES].load()) + " " + to_string(msgs_sent[SNAP].load()) + " "
          + to_string(msgs_dropped.load());
 }
 
-// a helper shell stops and continues me, the kernel keeps my sockets open the whole time
 static void freeze_myself(const string &msg) {
     istringstream ss(msg);
     string kind;
@@ -284,7 +268,6 @@ static void freeze_myself(const string &msg) {
     system((freeze_cmd + " >/dev/null 2>&1 &").c_str());
 }
 
-// relay
 static bool done_processing() {
     for (int peer = 0; peer < NUM_NODES; ++peer) {
         lock_guard g(outbox_mutex[peer]);
@@ -297,7 +280,6 @@ static bool done_processing() {
 static bool handle_relay_msg(int fd, const string &msg) {
     (void)fd;
 
-    // relay moved on to a new epoch, so my data is from a timeline that got thrown away
     if (msg.rfind("epoch ", 0) == 0) {
         istringstream ss(msg.substr(6));
         long long epoch = -1;
@@ -307,7 +289,6 @@ static bool handle_relay_msg(int fd, const string &msg) {
         relay_epoch = epoch;
         keep_old_data = keep == 1;
 
-        // systemd restarts me and the wipe happens before any data loads
         if (loaded_epoch.load() != -1 && loaded_epoch.load() != epoch)
             _exit(0);
         return true;
@@ -327,7 +308,6 @@ static bool handle_relay_msg(int fd, const string &msg) {
         return true;
     }
 
-    // allow.SH
     if (msg.rfind("connect ", 0) == 0) {
         string peers = msg.substr(8);
         string connect_cmd = "sudo " + string(ALLOW_SCRIPT) + " "
@@ -335,12 +315,10 @@ static bool handle_relay_msg(int fd, const string &msg) {
         system(connect_cmd.c_str());
         participating = true;
 
-        // stamped after the firewall changed, so testy knows when a cut really landed
         send_to_relay("fault", msg);
         return true;
     }
 
-    // crash.SH
     if (msg.rfind("terminate", 0) == 0) {
         string secs = (msg.size() > 10) ? msg.substr(10) : "30";
         if (secs.empty() || secs.find_first_not_of("0123456789.") != string::npos) secs = "30";
@@ -355,7 +333,6 @@ static bool handle_relay_msg(int fd, const string &msg) {
         return true;
     }
 
-    // slow, lossy or one way link to a peer
     if (msg.rfind("link ", 0) == 0) {
         istringstream ss(msg.substr(5));
         string peer;
@@ -371,7 +348,6 @@ static bool handle_relay_msg(int fd, const string &msg) {
         return true;
     }
 
-    // slow disk
     if (msg.rfind("disk ", 0) == 0) {
         disk_stall_ms = atoi(msg.substr(5).c_str());
         return true;
@@ -403,7 +379,7 @@ static void attach_reader_to_relay(int fd) {
     char c;
     while (true) {
         ssize_t n = read(fd, &c, 1);
-        if (n <= 0) return;          // relay wire broke
+        if (n <= 0) return;
         if (c == '\n') {
             if (!handle_relay_msg(fd, msg)) return;
             msg.clear();
@@ -413,7 +389,6 @@ static void attach_reader_to_relay(int fd) {
     }
 }
 
-// constantly spams connection reqs
 static int initiate_to_relay(const string &host, int port) {
     int backoff_ms = 100;
 
@@ -437,8 +412,6 @@ static int initiate_to_relay(const string &host, int port) {
         addr.sin_port   = htons(port);
         addr.sin_addr   = relay_ip;
 
-        // A stopped bastion swallows the SYN exactly like a DROP rule does, so
-        // an uncapped connect() would park here for ~2 minutes on every retry.
         if (connect_with_timeout(fd, addr, 2000))
             return fd;
 
@@ -460,7 +433,6 @@ static int initiate_to_peer(int peer_id) {
             continue;
         }
 
-        // a socket that failed connect() is unusable -- make a fresh one each try
         int fd = socket(AF_INET, SOCK_STREAM, 0);
         if (fd < 0)
             throw runtime_error("[initiate] socket failed: " + string(strerror(errno)));
@@ -486,11 +458,11 @@ static int initiate_to_peer(int peer_id) {
 }
 static void keep_relay_initiator_on_wire(string host, int port) {
     while (true) {
-        int fd = initiate_to_relay(host, port);   // blocks until connected
+        int fd = initiate_to_relay(host, port);
         relay_fd = fd;
         send_to_relay("hello", "hello");
         if (participating.load()) send_to_relay("participating", "participating");
-        attach_reader_to_relay(fd); // blocks until relay wire breaks
+        attach_reader_to_relay(fd);
         relay_fd = -1;
         close(fd);
     }
@@ -507,7 +479,6 @@ static void keep_initiator_on_wire(int peer_id) {
     }
 }
 
-// peers
 static void accept_4ever(int listener) {
     while (true) {
         int peerFD = accept(listener, nullptr, nullptr);
@@ -522,14 +493,12 @@ bool Psend(int peer, const string &buf) {
     int fd = my_fd_to[peer].load();
     if (fd < 0) return false;
 
-    // lossy link
     int drop_pct = link_drop_pct[peer].load();
     if (drop_pct > 0 && rand_sleep_timer_ms(1, 100) <= drop_pct) {
         msgs_dropped++;
         return true;
     }
 
-    // slow link
     auto send_at = steady_clock::now();
     int delay_ms = link_delay_ms[peer].load();
     if (delay_ms > 0)
@@ -539,7 +508,6 @@ bool Psend(int peer, const string &buf) {
         lock_guard g(outbox_mutex[peer]);
         if (outbox[peer].size() >= 1000) return false;
 
-        // tcp never reorders, so a late msg holds back everything behind it
         send_at = max(send_at, last_send_at[peer]);
         last_send_at[peer] = send_at;
         outbox[peer].push_back({send_at, buf});
@@ -556,7 +524,6 @@ static void drain_outbox_4ever(int peer) {
             unique_lock g(outbox_mutex[peer]);
             outbox_cv[peer].wait(g, [peer] { return !outbox[peer].empty(); });
 
-            // slow link holds the msg until its time comes
             auto send_at = outbox[peer].front().send_at;
             if (send_at > steady_clock::now()) {
                 g.unlock();
@@ -568,7 +535,6 @@ static void drain_outbox_4ever(int peer) {
             outbox[peer].pop_front();
         }
 
-        // a link that just went dead takes what was still waiting with it
         if (link_drop_pct[peer].load() >= 100) {
             msgs_dropped++;
             continue;
@@ -598,7 +564,6 @@ static void accept_clients_4ever(int listener) {
     }
 }
 
-// data
 static void wipe_data_if_new_epoch() {
     const long long epoch = relay_epoch.load();
     loaded_epoch = epoch;
@@ -611,7 +576,6 @@ static void wipe_data_if_new_epoch() {
     saved >> saved_epoch;
     if (saved_epoch == epoch) return;
 
-    // nodes disagreed last run, so keep what they had for debugging
     if (keep_old_data.load()) {
         error_code ec;
         const string archive = DATA_DIR + "/archive";
@@ -620,14 +584,12 @@ static void wipe_data_if_new_epoch() {
         for (const char *name : {"snaps", "wal.txt", "raft.txt"})
             rename(path(DATA_DIR) / name, path(grave) / name, ec);
 
-        // only the last 3 graves stay
         vector<path> graves;
         for (auto &dir : directory_iterator(archive, ec)) graves.push_back(dir.path());
         sort(graves.begin(), graves.end());
         for (size_t i = 0; i + 3 < graves.size(); i++) remove_all(graves[i], ec);
     }
 
-    // raft can't merge logs that already split, so every node starts empty
     remove_all(DATA_DIR + "/snaps");
     remove(DATA_DIR + "/wal.txt");
     remove(DATA_DIR + "/wal.txt.tmp");
@@ -640,7 +602,6 @@ static void wipe_data_if_new_epoch() {
     send_to_relay("wiped", to_string(epoch));
 }
 
-// (k v) (fn ln tlr) (i t CRC)
 int main(int argc, char *argv[]) {
 
     myNodeID = stoi(argv[1]);
@@ -648,7 +609,6 @@ int main(int argc, char *argv[]) {
     connect_to_CB();
     get_and_update_life_count(myNodeID);
 
-    // connect to relay
     thread([] {
         keep_relay_initiator_on_wire(RELAY_IP, RELAY_PORT);
     }).detach();

@@ -1,9 +1,6 @@
 import type { Fault } from '../hooks/useRelay.tsx'
 import { fmtMs, niceCeil, useWidth } from './scale.ts'
 
-// for every fault that took the leader out: how long until someone noticed,
-// until a new leader won, and until a write got through again. three stages of one wait
-
 const ROW_H = 30
 const BAR_H = 14
 const LABEL_W = 250
@@ -20,26 +17,30 @@ function Detect({ faults }: DetectProps) {
 
     const longest = Math.max(100, ...hits.map(fault => Math.max(fault.detect_ms ?? 0, fault.elect_ms ?? 0, fault.ots_ms ?? 0)))
     const msMax = niceCeil(longest)
-    const plotW = Math.max(60, width - LABEL_W - RIGHT)
-    const x = (ms: number) => LABEL_W + (Math.min(ms, msMax) / msMax) * plotW
-    const ticks = [0, 0.25, 0.5, 0.75, 1].map(share => share * msMax)
-    const height = hits.length * ROW_H + 26
+    const labelW = width < 560 ? 130 : LABEL_W
+    const maxChars = width < 560 ? 18 : 38
+    const plotW = Math.max(60, width - labelW - RIGHT)
+    const x = (ms: number) => labelW + (Math.min(ms, msMax) / msMax) * plotW
+    const ticks = (width < 560 ? [0, 0.5, 1] : [0, 0.25, 0.5, 0.75, 1]).map(share => share * msMax)
+    const plotH = hits.length * ROW_H
+    const height = plotH + 44
 
     return (
         <div className="detect" ref={ref}>
             <p className="legend">
-                <span className="swatch stage-1" /> someone noticed
-                <span className="swatch stage-2" /> new leader won
-                <span className="swatch stage-3" /> a write got through
+                <span><span className="swatch stage-1" /> someone noticed</span>
+                <span><span className="swatch stage-2" /> new leader won</span>
+                <span><span className="swatch stage-3" /> a write got through</span>
             </p>
             {width > 0 && (
-                <svg width={width} height={height} role="img" aria-label="time to replace a leader, per fault">
+                <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label="time to replace a leader, per fault">
                     {ticks.map(tick => (
                         <g key={tick}>
-                            <line className="grid" x1={x(tick)} x2={x(tick)} y1={0} y2={hits.length * ROW_H} />
-                            <text className="tick" x={x(tick)} y={hits.length * ROW_H + 16} textAnchor="middle">{fmtMs(tick)}</text>
+                            <line className="grid" x1={x(tick)} x2={x(tick)} y1={0} y2={plotH} />
+                            <text className="tick" x={x(tick)} y={plotH + 16} textAnchor="middle">{fmtMs(tick)}</text>
                         </g>
                     ))}
+                    <text className="axis-name" x={labelW + plotW / 2} y={plotH + 36} textAnchor="middle">time after the fault took the leader out</text>
                     {hits.map((fault, row) => {
                         const y = row * ROW_H + (ROW_H - BAR_H) / 2
                         const noticed = fault.detect_ms ?? null
@@ -55,8 +56,8 @@ function Detect({ faults }: DetectProps) {
                             <g key={fault.id}>
                                 <title>{`${fault.label}: noticed after ${fmtMs(fault.detect_ms)}, new leader after ${fmtMs(fault.elect_ms)}, out of service ${fmtMs(fault.ots_ms)}`}</title>
                                 <rect className="hit" x={0} y={row * ROW_H} width={width} height={ROW_H} />
-                                <text className="row-label" x={LABEL_W - 12} y={y + 11} textAnchor="end">
-                                    {fault.label.length > 38 ? fault.label.slice(0, 37) + '…' : fault.label}
+                                <text className="row-label" x={labelW - 12} y={y + 11} textAnchor="end">
+                                    {fault.label.length > maxChars ? fault.label.slice(0, maxChars - 1) + '…' : fault.label}
                                 </text>
                                 {stages.map(stage => stage.from !== null && stage.to !== null && stage.to > stage.from && (
                                     <rect key={stage.name} className={stage.name} y={y} height={BAR_H} rx={2}
@@ -69,7 +70,7 @@ function Detect({ faults }: DetectProps) {
                             </g>
                         )
                     })}
-                    <line className="baseline" x1={LABEL_W} x2={LABEL_W} y1={0} y2={hits.length * ROW_H} />
+                    <line className="baseline" x1={labelW} x2={labelW} y1={0} y2={plotH} />
                 </svg>
             )}
         </div>

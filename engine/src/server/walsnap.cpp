@@ -30,7 +30,6 @@ static xnt snap_term  = 0;
 static xnt applied_idx = 0;
 static unsigned long long apply_hash = 0;
 
-// turns entry into string
 static string serialize_entry(const entry& e) {
     return e.wr.k                                + " " +
            e.wr.v                                + " " +
@@ -59,7 +58,6 @@ static void chop_wal(xnt idx) {
     wal.close(); wal.open(WAL_PATH, ios::app);
 }
 
-// commit
 void apply_entries(xnt commit_idx) {
     unique_lock x(db_mutex);
     lock_guard y(log_mutex);
@@ -67,7 +65,6 @@ void apply_entries(xnt commit_idx) {
     for (; applied_idx < commit_idx; applied_idx++) {
         const entry& e = log_vector[applied_idx - snap_index];
 
-        // every node that applied the same entries in the same order has the same hash
         apply_hash = (apply_hash ^ e.checksum) * 1099511628211ULL;
         if (e.log_index % 500 == 0)
             note("hash", to_string(e.log_index) + " " + to_string(apply_hash));
@@ -88,7 +85,6 @@ xnt append_entry(const string& k, const string& v, xnt term) {
     e.stats.leader_node = myNodeID;
     e.stats.time_leader_received = now_ms();
 
-    // guards from truncate_wal
     {
         lock_guard y(log_mutex);
 
@@ -124,14 +120,12 @@ void append_entries(const vector<entry>& suffix) {
     log_index = snap_index + log_vector.size();
 }
 
-// read
 string apply_r(const string& k) {
     shared_lock lock(db_mutex);
     auto it = db.find(k);
     return it != db.end() ? it->second : "KEY_NOT_FOUND";
 }
 
-// ensure walsnap is open
 void ensure_wal_is_open() {
     create_directories(SNAP_DIR_PATH);
     wal.open(WAL_PATH, ios::app);
@@ -139,7 +133,6 @@ void ensure_wal_is_open() {
         throw runtime_error("[main] could not setup write handler");
 }
 
-// remove temp snap on reboot
 void remove_temp_snap() {
     for (auto& entry : directory_iterator(SNAP_DIR_PATH))
         if (entry.path().extension() == ".tmp") remove(entry.path());
@@ -179,19 +172,16 @@ void truncate_wal(xnt snap_idx, xnt last_term) {
     snap_term  = last_term;
 }
 
-// create snapshots
 void take_pics() {
     xnt prev_snap_idx = 0;
 
     while (true) {
 
-        // prevents constant checking when clients are not sending writes
         if (log_index.load() - prev_snap_idx < 100) {
             sleep_for(milliseconds(rand_sleep_timer_ms(100,700)));
             continue;
         }
 
-        // cutting entries a follower still needs makes it need a new snap after every snap
         xnt oldest_idx_a_follower_needs = get_oldest_idx_a_follower_needs();
 
         unique_lock s(snap_mutex);
@@ -213,7 +203,6 @@ void take_pics() {
                 wip_snap_arr[k] = db.contains(k) ? db.at(k) : "";
         }
 
-        // snap.tmp --> snap.txt
         ofstream f(SNAP_DIR_PATH + "snap" + ".tmp");
         f << snap_idx << " " << last_term << " " << snap_hash << "\n";
         for (auto& [k, v] : wip_snap_arr) f << k << " " << v << "\n";
@@ -233,13 +222,11 @@ void take_pics() {
         prev_snap_idx = snap_idx;
         s.unlock();
 
-        // prevent instant snapping
         sleep_for(milliseconds(rand_sleep_timer_ms(1200, 1800)));
 
     }
 }
 
-// load snap into DB
 pair<xnt, xnt> load_snap() {
     ifstream f(SNAP_DIR_PATH + "snap");
 
@@ -266,7 +253,6 @@ pair<xnt, xnt> load_snap() {
     return {snap_idx, last_term};
 }
 
-// replay wal entry not covered by snap
 void replay_wal(xnt snap_idx) {
 
     ifstream f(WAL_PATH);
@@ -288,8 +274,8 @@ void replay_wal(xnt snap_idx) {
         xnt idx, term, cs;
         ss >> k >> v >> fn >> ln >> tlr >> idx >> term >> cs;
 
-        if (ss.fail()) continue; // partial
-        if (idx <= snap_idx) continue; // covered by snap
+        if (ss.fail()) continue;
+        if (idx <= snap_idx) continue;
 
         entry e;
         e.wr.k = k;
@@ -301,7 +287,6 @@ void replay_wal(xnt snap_idx) {
         e.term = term;
         e.checksum = compute_checksum(e);
 
-        // partial
         if (e.checksum != cs) continue;
         if (idx != highest_idx + 1) break;
 
@@ -312,7 +297,6 @@ void replay_wal(xnt snap_idx) {
     log_index.store(highest_idx);
 }
 
-// get last log entry
 optional<entry> get_last_log_entry() {
     lock_guard lock(log_mutex);
     if (log_vector.empty()) return nullopt;
@@ -353,14 +337,12 @@ bool get_suffix(xnt &last_log_idx_in_old_batch, xnt &last_log_term_in_old_batch,
 
     bool suffix_starts_in_snap = last_log_idx_in_old_batch < snap_index;
 
-    // snap has now engulfed start of suffix
     if (suffix_starts_in_snap) {
         last_log_idx_in_old_batch  = snap_index;
         last_log_term_in_old_batch = snap_term;
         return false;
     }
 
-    // all of suffix is in the log vector
     last_log_term_in_old_batch = term_at(last_log_idx_in_old_batch);
     xnt first_pos = last_log_idx_in_old_batch - snap_index;
     for (xnt pos = first_pos; pos < log_vector.size() && suffix.size() < 1000; pos++)
@@ -451,12 +433,10 @@ string db_state() {
         log_len = snap_index + log_vector.size();
     }
 
-    // applied idx, its term, key count, db digest, apply hash, log idx
     return to_string(applied_idx) + " " + to_string(last_term) + " " + to_string(db.size()) + " " + to_string(digest)
          + " " + to_string(apply_hash) + " " + to_string(log_len);
 }
 
-// applied idx, log idx, snap idx, apply hash
 string log_stat() {
     shared_lock lock(db_mutex);
     lock_guard l(log_mutex);

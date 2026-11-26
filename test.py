@@ -23,49 +23,47 @@ I_AM_LEADER = 11
 I_AM_NOT_LEADER = 12
 IDK = 13
 
-WARMUP_SEC = 5          # clients write to a healthy cluster before anything breaks
-HEALTHY_SEC = 4         # the end of the warmup, the write rate every run gets compared to
-SETTLE_SEC = 2          # and keep writing a bit after everything healed
-RECOVER_MAX_SEC = 30    # a healed cluster that still can't take writes by then is stuck
+WARMUP_SEC = 5
+HEALTHY_SEC = 4
+SETTLE_SEC = 2
+RECOVER_MAX_SEC = 30
 CLIENT_TIMEOUT_SEC = 1.0
-SCOUT_EVERY_SEC = 0.025 # every node gets asked this often, so a new leader is noticed right away
+SCOUT_EVERY_SEC = 0.025
 SCOUT_TIMEOUT_SEC = 0.3
-FRAME_EVERY_SEC = 0.5   # how often the browser gets a new point for its graphs
+FRAME_EVERY_SEC = 0.5
 
-# what a run does unless the browser says otherwise
 config = {
-    "mode": "chaos",    # chaos: random faults. scenario: one handmade edge case. sweep: many runs, one knob turned
-    "name": "",         # which scenario or sweep
-    "seed": None,       # None: pulled from the os so no two runs are alike. a number replays that run's dice
-    "seconds": 60,      # how long things stay broken
-    "flags": {},        # research switches, the nodes read them with get_flag()
-    "label": "",        # what this variant is called on the compare page
-    "fresh": True,      # clear every node's data before the run
-    "hard": True,       # True: cut links with the firewall. False: nodes drop the msgs themselves (instant + exact)
+    "mode": "chaos",
+    "name": "",
+    "seed": None,
+    "seconds": 60,
+    "flags": {},
+    "label": "",
+    "fresh": True,
+    "hard": True,
     "clients": 10,
-    "think_ms": 5,      # pause between one client's writes
-    "keys": 200,        # per client. small on purpose so the db stops growing
-    "gap": 3.0,         # chaos: avg seconds between new faults
-    "repeats": 1,       # sweep: runs per x
-    "xs": None,         # sweep: other x values than the usual ones
+    "think_ms": 5,
+    "keys": 200,
+    "gap": 3.0,
+    "repeats": 1,
+    "xs": None,
 }
 
 relay_ws = None
-cluster = {}            # node -> dead / born dead / participating, as the relay sees it
+cluster = {}
 cluster_known = None
 born_dead_flags = []
 done_flags = []
 db_state_flags = []
 db_states = {}
-deaf_to = set()         # nodes whose old process is still talking about data that is being cleared
+deaf_to = set()
 is_test_over = False
 phase = "idle"
 frames = []
-viable_log = []         # (t, could an ideal protocol have a leader), one entry every time the answer flips
-worst_lag_ms = 0        # longest this process itself got stuck. big means the timings can't be trusted
+viable_log = []
+worst_lag_ms = 0
 vreqs_seen = {}
 
-# testy --> relay --> node
 async def send_to_node(node_id, text):
     await relay_ws.send(json.dumps({"to": node_id, "msg": text}))
 
@@ -88,7 +86,6 @@ async def listen_to_relay():
             cluster[msg["down"]] = "dead"
             checks.on_node_down(msg["down"])
 
-        # one line of telemetry from a node
         elif "tm" in msg:
             node_id = msg["tm"]["node"]
             if node_id in deaf_to: continue
@@ -119,8 +116,6 @@ async def wait_until(is_true, timeout):
     return False
 
 
-# ---------------------------------------------------------------- clients
-
 def encode_write(key, val):
     key, val = key.encode(), val.encode()
     return bytes([OP_WR]) + struct.pack("<I", len(key)) + key + struct.pack("<I", len(val)) + val
@@ -144,7 +139,6 @@ async def run_client(client_num, rng, keys, think_sec):
             conn = asyncio.open_connection(guess(guess_node), CLIENT_PORT)
             reader, writer = await asyncio.wait_for(conn, timeout=1)
 
-            # send writes to leader
             while not is_test_over:
 
                 wr_num += 1
@@ -152,7 +146,6 @@ async def run_client(client_num, rng, keys, think_sec):
                 began = time.time()
                 writer.write(encode_write(key, str(wr_num)))
 
-                # no answer: the write may or may not be in the log
                 try:
                     reply = await asyncio.wait_for(reader.readexactly(5), timeout=CLIENT_TIMEOUT_SEC)
                 except (OSError, asyncio.TimeoutError, asyncio.IncompleteReadError):
@@ -166,19 +159,17 @@ async def run_client(client_num, rng, keys, think_sec):
                     checks.wrote(key, wr_num, "ok", began, time.time())
                     await asyncio.sleep(think_sec)
 
-                # connect to leader
                 elif leader_status == I_AM_NOT_LEADER:
                     checks.wrote(key, wr_num, "redirect", began, time.time())
                     leader_id = struct.unpack_from("<i", reply, 1)[0]
                     guess_node = leader_id if 0 <= leader_id < NUM_NODES else rng.randrange(NUM_NODES)
                     break
 
-                else: # idk
+                else:
                     checks.wrote(key, wr_num, "idk", began, time.time())
                     guess_node = rng.randrange(NUM_NODES)
                     break
 
-        # restart while loop
         except (OSError, asyncio.TimeoutError):
             guess_node = rng.randrange(NUM_NODES)
 
@@ -188,8 +179,6 @@ async def run_client(client_num, rng, keys, think_sec):
                 writer.close()
             await asyncio.sleep(0.02)
 
-# a scout never follows the leader, it keeps asking one node. the moment that node
-# starts leading, a write gets through, which is how out of service time is measured
 async def run_scout(node_id):
 
     wr_num = 0
@@ -226,9 +215,6 @@ async def run_scout(node_id):
                 writer.close()
             await asyncio.sleep(SCOUT_EVERY_SEC)
 
-
-# ---------------------------------------------------------------- watching the run
-
 def make_frame():
     counts = checks.next_tick()
     lat = sorted(counts["lat"])
@@ -240,11 +226,9 @@ def make_frame():
             nodes.append({"up": 0})
             continue
 
-        # up 2: process exists but has gone quiet (frozen or limping)
         nodes.append({"up": 1 if checks.heard_from(node_id, 0.8) else 2, "role": stat["role"],
                       "term": stat["term"], "commit": stat["commit"], "conn": stat["conn"]})
 
-        # counter starts over when a node restarts
         seen = vreqs_seen.get(node_id, 0)
         vreq += stat["vreq"] - seen if stat["vreq"] >= seen else stat["vreq"]
         vreqs_seen[node_id] = stat["vreq"]
@@ -285,8 +269,6 @@ def viable_spans(end):
     return spans
 
 
-# ---------------------------------------------------------------- one run
-
 async def reset_cluster(keep):
     restarting = [node_id for node_id in range(NUM_NODES) if cluster.get(node_id) == "participating"]
     for node_id in restarting:
@@ -304,13 +286,11 @@ async def break_things(rng, run):
     elif run["mode"] == "scenario":
         await chaos.SCENARIOS[run["name"]][0](rng, run["seconds"])
 
-    # one point of a sweep
     else:
         fault = chaos.SWEEPS[run["name"]][0]
         if fault: await fault(rng, run["seconds"], run["x"])
         else: await chaos.SCENARIOS[run["x"]][0](rng, chaos.SCENARIOS[run["x"]][2])
 
-# seconds after the heal until writes flow again without a gap, None if they never do
 async def wait_for_service(healed_at):
     while checks.now() < healed_at + RECOVER_MAX_SEC:
         await asyncio.sleep(0.1)
@@ -348,15 +328,12 @@ async def check_agreement():
         await send_to_node(node_id, "writes_stopped")
     await wait_for_all(done_flags, 30)
 
-    # a follower says done once it has all its leader had committed in the last msg it saw,
-    # which can be a moment too early. so a node that is only behind gets a few more chances
     for attempt in range(15):
         nodes = await ask_every_node_what_it_holds()
         if checks.judge(nodes, []) != "LAGGING": break
         await asyncio.sleep(1)
     return nodes
 
-# what one node's db holds for every key a client ever touched
 async def read_back(node_id):
     keys = sorted(set(checks.acked) | set(checks.maybe))
     db = {}
@@ -382,7 +359,6 @@ def check(name, ok, detail):
 
 def judge_run(run, nodes, db, faults_began, healed_at, measured_until, recover_sec):
 
-    # --- safety: any of these failing is a real bug
     two_leaders = checks.terms_with_two_leaders(checks.wins)
     two_votes = checks.double_votes(checks.votes)
     went_back = checks.term_went_back(checks.terms)
@@ -423,19 +399,16 @@ def judge_run(run, nodes, db, faults_began, healed_at, measured_until, recover_s
     unsafe = any(result["ok"] is False for result in results[:7]) or verdict == "DIVERGED"
     passed = all(result["ok"] is True for result in results)
 
-    # --- did testy itself keep up? says nothing about raft, but bad timings need to be thrown out
     kept_up = worst_lag_ms < 100 and checks.counts["notes_lost"] == 0
     results.append(check("test harness kept up", kept_up,
                          f"testy froze for up to {round(worst_lag_ms)}ms, nodes dropped {checks.counts['notes_lost']} telemetry lines"))
 
-    # --- out of service time
     seconds = measured_until - faults_began
     outages = checks.find_outages(checks.acks, faults_began, measured_until, checks.OUTAGE_MIN_SEC)
     could_have_led = viable_spans(measured_until)
     oos = sum(end - start for start, end in outages)
     oos_avoidable = checks.overlap(outages, could_have_led)
 
-    # --- how fast a hurt leader got replaced
     for fault in chaos.faults:
         if fault["hit_leader"]: checks.time_the_fault(fault, measured_until)
     timed = [fault for fault in chaos.faults if fault["hit_leader"]]
@@ -445,7 +418,6 @@ def judge_run(run, nodes, db, faults_began, healed_at, measured_until, recover_s
     terms_then = [term for t, node_id, term in checks.crowned if t < faults_began]
     lat = sorted(ms for t, ms in checks.writes if faults_began <= t <= measured_until)
 
-    # what the same clients got out of the cluster before anything broke. the first second is them connecting
     healthy_per_sec = len([t for t, ms in checks.writes if faults_began - HEALTHY_SEC <= t < faults_began]) / HEALTHY_SEC
 
     metrics = {
@@ -480,7 +452,6 @@ def judge_run(run, nodes, db, faults_began, healed_at, measured_until, recover_s
     if run["name"] == "links" and run["mode"] == "trial":
         metrics["ideal"] = round(checks.ideal_availability(run["x"]), 4)
 
-    # short: all the compare page needs, and all the relay keeps in memory
     short = {key: run[key] for key in ("id", "mode", "name", "label", "flags", "seed", "hard", "seconds", "sweep", "x")}
     short.update({"verdict": verdict, "passed": passed, "metrics": metrics})
 
@@ -506,18 +477,15 @@ async def run_one(run):
     await send_to_browser({"run": run})
     watchers = [asyncio.create_task(watcher()) for watcher in (send_frames_4ever, watch_viable_4ever, watch_myself_4ever)]
 
-    # clear the db
     phase = "reset"
     if run["fresh"]:
         await reset_cluster(False)
 
-    # wake up cluster
     for node_id in range(NUM_NODES):
         await chaos.wake(node_id)
     is_cluster_up = await wait_until(lambda: all(checks.up[n] and checks.heard_from(n) for n in range(NUM_NODES)), 40)
     await chaos.wait_for_leader(15 if is_cluster_up else 0)
 
-    # spawn clients
     phase = "warmup"
     clients = []
     for client_num in range(run["clients"]):
@@ -527,13 +495,11 @@ async def run_one(run):
         clients.append(asyncio.create_task(run_scout(node_id)))
     await asyncio.sleep(WARMUP_SEC)
 
-    # break things
     phase = "faults"
     faults_began = checks.now()
     if is_cluster_up:
         await break_things(rng, run)
 
-    # heal, then give crashed nodes time to come back on their own
     phase = "heal"
     await chaos.heal()
     healed_at = checks.now()
@@ -542,7 +508,6 @@ async def run_one(run):
     await asyncio.sleep(SETTLE_SEC)
     measured_until = checks.now()
 
-    # stop clients and wait for them to finish
     phase = "drain"
     is_test_over = True
     await asyncio.gather(*clients)
@@ -565,8 +530,6 @@ async def run_one(run):
     with open(f"runs/{run['id']}/summary.json", "w") as f: json.dump({"run": run, "summary": summary}, f)
     with open(f"runs/{run['id']}/frames.json", "w") as f: json.dump(frames, f)
 
-    # nodes that disagree can never agree again, so the next run has to start empty.
-    # their data is kept on disk only when something was actually wrong, not merely slow
     phase = "idle"
     if not summary["passed"]:
         await reset_cluster(summary["unsafe"])
@@ -574,8 +537,6 @@ async def run_one(run):
     print(f"{run['id']}: {summary['verdict']}, {'passed' if summary['passed'] else 'FAILED'}", flush=True)
     return summary
 
-
-# ---------------------------------------------------------------- what to run
 
 def variant_name(flags):
     on = sorted(name if value == 1 else f"{name}={value}" for name, value in flags.items())
@@ -593,7 +554,7 @@ def new_run(what, **changes):
 async def run_sweep():
     fault, x_name, xs, about = chaos.SWEEPS[config["name"]]
     xs = config["xs"] or xs
-    turn = chaos.KNOBS.get(config["name"]) # some sweeps turn a switch inside the nodes instead of a fault
+    turn = chaos.KNOBS.get(config["name"])
 
     sweep = {"id": time.strftime("%Y%m%d-%H%M%S") + "-sweep-" + config["name"], "name": config["name"], "about": about,
              "x_name": x_name, "xs": xs, "label": config["label"] or variant_name(config["flags"]),
@@ -614,7 +575,6 @@ async def run_sweep():
     os.makedirs(f"runs/{sweep['id']}", exist_ok=True)
     with open(f"runs/{sweep['id']}/sweep.json", "w") as f: json.dump(sweep, f)
 
-# the browser builds its menu from this
 def print_catalog():
     print(json.dumps({
         "scenarios": [{"name": name, "about": about, "seconds": seconds} for name, (run, about, seconds) in chaos.SCENARIOS.items()],
@@ -625,29 +585,24 @@ def print_catalog():
 async def main():
     global relay_ws, cluster_known
 
-    # connect to relay
     relay_ws = await websockets.connect(RELAY_WS_URL, max_size=None)
     await relay_ws.send(json.dumps({"to": "relay", "msg": "i am testy"}))
     chaos.send_to_node = send_to_node
 
-    # create flags
     cluster_known = asyncio.Event()
     for _ in range(NUM_NODES):
         born_dead_flags.append(asyncio.Event())
         done_flags.append(asyncio.Event())
         db_state_flags.append(asyncio.Event())
 
-    # listen to relay
     watcher = asyncio.create_task(listen_to_relay())
     await cluster_known.wait()
 
-    # run test
     if config["mode"] == "sweep":
         await run_sweep()
     else:
         await run_one(new_run(config["name"] or "chaos"))
 
-    # close
     watcher.cancel()
     await relay_ws.close()
 

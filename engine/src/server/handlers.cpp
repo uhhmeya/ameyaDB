@@ -3,10 +3,8 @@
 #include <cstdint>
 #include <cstring>
 
-// imports
 string apply_r(const string& k);
 
-// raft.cpp
 bool am_i_leader();
 int  who_is_leader();
 bool onWrite(const string& k, const string& v);
@@ -17,7 +15,6 @@ void onAE(int leader_id, xnt term, xnt last_log_idx_in_old_batch, xnt last_log_t
 void onAERes(int f_ID, xnt f_Term, xnt last_log_idx_in_next_old_batch, bool was_ae_accepted);
 void onSnap(int leader_id, xnt term, const string& snap);
 
-// helpers
 static bool read_tcp(int client_fd, void* buf, size_t n) {
     size_t received = 0;
     while (received < n) {
@@ -84,7 +81,6 @@ static bool reply(int client_fd, Status status, int leader_hint) {
     return write_tcp(client_fd, buf, sizeof(buf));
 }
 
-// handlers
 bool handle_write(int client_fd) {
     auto kv = read_kv(client_fd);
     if (!kv) return false;
@@ -96,12 +92,10 @@ bool handle_write(int client_fd) {
         return reply(client_fd, I_AM_NOT_LEADER, leader_id);
     }
 
-    // Node received AE with higher term OR write didn't reach quorum
     auto [k, v] = *kv;
     if (!onWrite(k, v))
         return reply(client_fd, IDK, -1);
 
-    // ack
     return reply(client_fd, I_AM_LEADER, myNodeID);
 }
 

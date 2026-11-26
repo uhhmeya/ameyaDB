@@ -27,7 +27,7 @@ without the clumsy report system!
 
 # Chaos testing
 test.py breaks the cluster on purpose and judges what happens. The run page picks what to break.
-1. random chaos : crashes, cut links, slow links, lost msgs, one way links, slow disks & frozen processes at random moments, on top of each other. The seed comes from the OS so no two runs are alike, and it is shown so a run can be replayed.
+1. random chaos : crashes, cut links, slow links, lost msgs, one way links, slow disks & frozen processes at random moments, on top of each other. The seed comes from the OS so no two runs are alike, and it is saved with each run (in the downloaded run file and the compare page's csv).
 2. handmade edge case : one of 24 situations that random chaos almost never lands on (`SCENARIOS` in chaos.py)
 3. sweep : the same test many times with one knob turned further each run (`SWEEPS` in chaos.py)
 
@@ -59,6 +59,9 @@ The question, the hypotheses & the experiments are in the research brief: https:
 # Looking at a saved run without the cluster
 1. `cd frontend && npm run dev`
 2. open http://localhost:5173 & pick the file you downloaded from the live page
+
+# Figures for a paper
+Print the live or compare page (cmd + P, save as PDF). Every chart comes out as a vector figure on a white background.
 
 # usage
 1. download project & cd to it
